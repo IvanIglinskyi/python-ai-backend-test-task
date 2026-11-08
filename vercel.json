@@ -6,6 +6,5 @@
       "excludeFiles": "{tests/**,helpdesk-builder/**,docker/**,.venv/**}"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "crons": [{ "path": "/internal/tick", "schedule": "0 3 * * *" }]
 }
