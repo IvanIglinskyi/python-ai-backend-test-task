@@ -91,10 +91,21 @@
   {% else %}
   <div class="flex items-center gap-3 px-5 py-6 text-sm text-slate-500 dark:text-slate-400">
     {% if t.status == "draft_failed" %}
-      <span class="text-rose-600 dark:text-rose-400">The model did not answer after several attempts.</span>
+      <div class="min-w-0">
+        <p class="font-medium text-rose-600 dark:text-rose-400">The AI model did not answer after several attempts.</p>
+        {% if t.job_error %}<p class="mt-0.5 truncate text-xs text-slate-400" title="{{ t.job_error }}">{{ t.job_error }}</p>{% endif %}
+      </div>
+      <button hx-post="/operator/tickets/{{ t.ticket_id }}/redraft" hx-target="#ticket-{{ t.key }}" hx-swap="outerHTML"
+              class="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500">
+        Retry drafting
+      </button>
+    {% elif t.throttled %}
+      <svg class="h-4 w-4 shrink-0 animate-spin text-amber-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+      Waiting for the AI provider's rate limit, then drafting…
     {% else %}
-      <svg class="h-4 w-4 animate-spin text-indigo-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+      <svg class="h-4 w-4 shrink-0 animate-spin text-indigo-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
       Searching the knowledge base and drafting a reply…
+      {% if t.job_error %}<span class="text-xs text-amber-600 dark:text-amber-400">(retrying after an error)</span>{% endif %}
     {% endif %}
     <p class="ml-auto max-w-md truncate text-slate-400" title="{{ t.message }}">“{{ t.message }}”</p>
   </div>

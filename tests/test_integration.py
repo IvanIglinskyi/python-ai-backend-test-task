@@ -468,3 +468,72 @@ def test_ui_rejects_bad_input_without_server_errors(db) -> None:
     assert bad_email == 422
     assert empty_reply == 422 and deliveries == 0
     assert form_ok == 303 and jobs == 2
+
+
+def test_provider_throttling_never_spends_attempts_or_fails_the_ticket(db, monkeypatch) -> None:
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    get_settings.cache_clear()
+
+    async def scenario():
+        await _ingest()
+        factory = get_session_factory()
+        settings = get_settings().model_copy(update={"job_max_attempts": 2})
+        transport = httpx.MockTransport(
+            lambda request: httpx.Response(429, headers={"retry-after": "2"}, text="slow down"))
+        async with httpx.AsyncClient(transport=transport) as client:
+            for _ in range(10):  # far more throttles than job_max_attempts
+                async with factory() as session:
+                    await session.execute(text("UPDATE jobs SET available_at = now()"))
+                    await session.execute(text("DELETE FROM llm_pause"))
+                    await session.commit()
+                    job = await drafting.claim_job(session, lease_seconds=300)
+                await drafting.process_job(factory, client, settings, job)
+        async with factory() as session:
+            job = await session.scalar(select(Job))
+            snapshot = (job.status, job.attempts, job.last_error)
+            status = (await session.get(Ticket, "T-1042")).status
+            pause = await session.scalar(text(
+                "SELECT EXTRACT(EPOCH FROM until - now()) FROM llm_pause WHERE id = 1"))
+        async with factory() as session:
+            waits = await rate_limit.try_acquire(session, limit=60)
+        return snapshot, status, float(pause), waits
+
+    (job_status, attempts, last_error), status, pause, waits = db(scenario)
+    assert job_status == "queued" and attempts == 0
+    assert "429" in last_error
+    assert status != "draft_failed"
+    assert 0 < pause <= 2
+    assert waits > 0  # the shared pause blocks every caller
+
+
+def test_retry_drafting_requeues_a_failed_ticket(db, monkeypatch) -> None:
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    get_settings.cache_clear()
+
+    async def scenario():
+        await _ingest()
+        factory = get_session_factory()
+        settings = get_settings().model_copy(update={"job_max_attempts": 1})
+        async with factory() as session:
+            job = await drafting.claim_job(session, lease_seconds=300)
+        transport = httpx.MockTransport(lambda request: httpx.Response(500))
+        async with httpx.AsyncClient(transport=transport) as client:
+            await drafting.process_job(factory, client, settings, job)
+        async with factory() as session:
+            failed_status = (await session.get(Ticket, "T-1042")).status
+        async with _app_client() as client:
+            card = await client.get("/operator/tickets/T-1042/card")
+            redraft = await client.post("/operator/tickets/T-1042/redraft",
+                                        headers={"HX-Request": "true"})
+            again = await client.post("/operator/tickets/T-1042/redraft")
+        async with factory() as session:
+            stored = await session.scalar(select(Job))
+            ticket = await session.get(Ticket, "T-1042")
+        return failed_status, card.text, redraft, again.status_code, stored, ticket.status
+
+    failed_status, card, redraft, again, job, status = db(scenario)
+    assert failed_status == "draft_failed"
+    assert "Retry drafting" in card
+    assert redraft.status_code == 200 and "Retry drafting" not in redraft.text
+    assert again == 409
+    assert job.status == "queued" and job.attempts == 0 and status == "queued"

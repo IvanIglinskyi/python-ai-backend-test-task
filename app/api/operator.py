@@ -17,10 +17,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import schedule_kick
-from app.db.models import Delivery, Draft, Ticket, WebhookEvent
+from app.db.models import Delivery, Draft, Job, Ticket, WebhookEvent
 from app.db.session import session_scope
 from app.kb.search import load_articles
 from app.services.delivery import DecisionError, approve_draft, reject_draft, retry_failed
+from app.services.drafting import requeue_failed
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
@@ -141,13 +142,30 @@ async def _ticket_views(session: AsyncSession, tickets: list[Ticket]) -> list[di
             }
         by_ticket.setdefault(d.ticket_id, []).append(view)
 
+    # Last error of the newest unfinished draft job per ticket (shown while waiting).
+    job_errors: dict[str, str | None] = {}
+    for job in (
+        await session.scalars(
+            select(Job)
+            .where(Job.ticket_id.in_(ticket_ids), Job.kind == "generate_draft",
+                   Job.status.in_(["queued", "running", "failed"]))
+            .order_by(Job.id)
+        )
+    ).all():
+        job_errors[job.ticket_id] = job.last_error
+
     views = []
     for t in tickets:
         ticket_drafts = by_ticket.get(t.ticket_id, [])
         live = t.status in LIVE_STATUSES or any(
             v["delivery"] and v["delivery"]["live"] for v in ticket_drafts
         )
+        job_error = job_errors.get(t.ticket_id)
         views.append({
+            "job_error": job_error,
+            "throttled": bool(job_error) and (
+                "429" in job_error or "rate limit" in job_error
+            ) and t.status != "draft_failed",
             "ticket_id": t.ticket_id,
             "key": re.sub(r"[^A-Za-z0-9_-]", "-", t.ticket_id),
             "customer_email": t.customer_email,
@@ -304,5 +322,21 @@ async def retry(
         await retry_failed(session, delivery_id)
     except DecisionError as exc:
         return await _conflict(request, session, ticket_id, exc)
+    schedule_kick(request, background)
+    return await _after_action(request, session, ticket_id, background)
+
+
+@router.post("/operator/tickets/{ticket_id}/redraft")
+async def redraft(
+    ticket_id: str,
+    request: Request,
+    background: BackgroundTasks,
+    session: AsyncSession = Depends(session_scope),
+) -> Response:
+    """Put a ticket whose drafting gave up (draft_failed) back into the queue."""
+    if await session.get(Ticket, ticket_id) is None:
+        raise HTTPException(status_code=404, detail="ticket not found")
+    if not await requeue_failed(session, ticket_id) and not request.headers.get("hx-request"):
+        raise HTTPException(status_code=409, detail="nothing to retry for this ticket")
     schedule_kick(request, background)
     return await _after_action(request, session, ticket_id, background)
