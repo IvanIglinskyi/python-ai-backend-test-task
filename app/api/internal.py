@@ -17,9 +17,18 @@ def _authorize(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="invalid cron secret")
 
 
-# GET for Vercel Cron, POST for kicks and external schedulers.
-@router.api_route("/tick", methods=["GET", "POST"])
-async def tick(request: Request, authorization: str | None = Header(default=None)) -> dict:
-    """Drain the draft and delivery queues for up to TICK_SECONDS."""
+async def _tick(request: Request, authorization: str | None) -> dict:
     _authorize(authorization)
     return await drain(get_settings(), base_url=public_base_url(request))
+
+
+@router.get("/tick", operation_id="tick_cron")
+async def tick_cron(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """Vercel Cron: drain the draft and delivery queues for up to TICK_SECONDS."""
+    return await _tick(request, authorization)
+
+
+@router.post("/tick", operation_id="tick")
+async def tick(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """Kicks and external schedulers: drain the queues for up to TICK_SECONDS."""
+    return await _tick(request, authorization)
