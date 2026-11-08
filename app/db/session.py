@@ -12,7 +12,14 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 def get_engine():
     global _engine
     if _engine is None:
-        _engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        _engine = create_async_engine(
+            get_settings().database_url,
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
+            # The helpdesk gives up after 2 s; fail fast instead of queueing forever.
+            pool_timeout=1.5,
+        )
     return _engine
 
 
@@ -32,3 +39,12 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
     factory = get_session_factory()
     async with factory() as session:
         yield session
+
+
+async def dispose_engine() -> None:
+    """Close pooled connections (tests run each case in a fresh event loop)."""
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _session_factory = None

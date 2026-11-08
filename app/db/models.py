@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,11 +38,14 @@ class Job(Base):
     """One durable unit of work per webhook event. Duplicate event_id does not enqueue twice."""
 
     __tablename__ = "jobs"
+    __table_args__ = (Index("ix_jobs_claim", "status", "available_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     event_id: Mapped[str] = mapped_column(String(128), unique=True)
     kind: Mapped[str] = mapped_column(String(64))
     ticket_id: Mapped[str] = mapped_column(String(128), index=True)
+    # queued -> running -> done | failed. A running job whose lease
+    # (available_at) expired is claimed again, so a crashed worker loses nothing.
     status: Mapped[str] = mapped_column(String(32), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     available_at: Mapped[datetime] = mapped_column(
@@ -67,16 +70,40 @@ class Draft(Base):
 
 
 class Delivery(Base):
+    """Exactly one row per approved draft. Retries reuse the row and its idempotency key."""
+
     __tablename__ = "deliveries"
+    __table_args__ = (Index("ix_deliveries_claim", "state", "available_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     draft_id: Mapped[int] = mapped_column(ForeignKey("drafts.id"), unique=True)
     ticket_id: Mapped[str] = mapped_column(String(128), index=True)
+    reply_url: Mapped[str] = mapped_column(Text)
+    # Frozen text that goes to the customer; retries never re-read the draft.
+    message: Mapped[str] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(32), default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    # Next attempt time for `pending`, lease expiry for `in_flight`.
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LlmCall(Base):
+    """One row per provider call; the sliding window behind the 60/min limit."""
+
+    __tablename__ = "llm_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    called_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
 
 
 class MockReply(Base):
