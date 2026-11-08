@@ -13,7 +13,8 @@ class MockTicketIn(BaseModel):
     ticket_id: str = Field(min_length=1, max_length=128)
     customer_email: EmailStr
     message: str = Field(min_length=1)
-    event_id: str = Field(min_length=1, max_length=128)
+    # Generated when omitted; pass the same value to simulate a redelivery.
+    event_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class ReplyIn(BaseModel):
