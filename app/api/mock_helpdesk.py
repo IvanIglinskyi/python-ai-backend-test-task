@@ -9,7 +9,7 @@ stored. Only the Idempotency-Key keeps the customer from a second copy.
 import asyncio
 import random
 import uuid
-from html import escape
+from datetime import UTC
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import public_base_url, schedule_kick
+from app.api.operator import templates
 from app.config import get_settings
 from app.db.models import MockReply
 from app.db.session import session_scope
@@ -54,33 +55,32 @@ async def open_ticket(
     return {**result, "webhook": payload}
 
 
+EXAMPLES = [
+    "Не можу експортувати звіт у PDF",
+    "Як запросити нового учасника в робочий простір?",
+    "Звіт у CSV показує неправильний часовий пояс",
+    "Хочу перейти на інший тарифний план",
+]
+
+
 @router.get("", response_class=HTMLResponse)
-async def mock_home(session: AsyncSession = Depends(session_scope)) -> str:
+async def mock_home(request: Request, session: AsyncSession = Depends(session_scope)):
     replies = (
         await session.scalars(select(MockReply).order_by(MockReply.id.desc()).limit(100))
     ).all()
-    rows = "".join(
-        f"<tr><td>{escape(r.ticket_id)}</td><td>{escape(r.idempotency_key)}</td>"
-        f"<td><pre style='white-space:pre-wrap;margin:0'>{escape(r.message)}</pre></td></tr>"
-        for r in replies
-    ) or "<tr><td colspan='3'>Відповідей ще немає.</td></tr>"
-    return (
-        "<!doctype html><html lang='uk'><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<title>Мок хелпдеску</title><style>body{font-family:system-ui,sans-serif;"
-        "max-width:960px;margin:0 auto;padding:16px}td{border-top:1px solid #ccc;padding:4px;"
-        "vertical-align:top}input,textarea{width:100%;box-sizing:border-box}</style></head><body>"
-        "<h1>Мок хелпдеску</h1><p><a href='/operator'>До оператора</a></p>"
-        "<h2>Нове звернення</h2>"
-        "<form method='post' action='/mock/helpdesk/tickets/form'>"
-        "<p>Ticket ID <input name='ticket_id' required></p>"
-        "<p>Email <input name='customer_email' type='email' value='user@example.com' required></p>"
-        "<p>Повідомлення <textarea name='message' required>Не можу експортувати звіт у PDF</textarea></p>"
-        "<button type='submit'>Надіслати вебхук</button></form>"
-        "<h2>Отримані відповіді (що побачив клієнт)</h2>"
-        f"<table><tr><th>Ticket</th><th>Idempotency-Key</th><th>Текст</th></tr>{rows}</table>"
-        "</body></html>"
-    )
+    settings = get_settings()
+    return templates.TemplateResponse(request, "mock.html", {
+        "active": "mock",
+        "replies": [
+            {"ticket_id": r.ticket_id, "idempotency_key": r.idempotency_key, "message": r.message,
+             "created": r.created_at.astimezone(UTC).strftime("%b %d, %H:%M:%S UTC")}
+            for r in replies
+        ],
+        "examples": EXAMPLES,
+        "suggested_id": f"T-{random.randint(1000, 9999)}",
+        "failure_pct": round(settings.mock_failure_rate * 100),
+        "slow_pct": round(settings.mock_slow_rate * 100),
+    })
 
 
 @router.post("/tickets/form")

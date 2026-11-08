@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Inbox · Lumenboard Support{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Support inbox</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review AI-drafted replies, edit if needed, then approve to send.</p>
+  </div>
+  <a href="/operator?filter={{ current }}"
+     class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800">
+    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.6m15.4 2A8 8 0 004.6 9M4.6 9H9m11 11v-5h-.6m0 0a8 8 0 01-15.4-2m15.4 2H15"/></svg>
+    Refresh
+  </a>
+</div>
+
+{% include "partials/stats.html" %}
+
+<section class="mt-6 space-y-4">
+  {% for t in tickets %}
+    {% include "partials/ticket_card.html" %}
+  {% else %}
+    <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
+      <p class="font-medium">No tickets here</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        Send one through the <a href="/mock/helpdesk" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">helpdesk mock</a>
+        or <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">POST /webhooks/helpdesk</code>.
+      </p>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}

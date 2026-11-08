@@ -420,3 +420,32 @@ def test_tick_picks_up_tickets_that_arrive_while_it_runs(db) -> None:
     stats = db(scenario)
     assert stats["drafts"] == 2
     assert stats["pending"] == []
+
+
+def test_operator_ui_renders_and_htmx_actions_return_the_card(db) -> None:
+    async def scenario():
+        draft_id = await _draft_ready()
+        async with _app_client() as client:
+            page = await client.get("/operator")
+            review = await client.get("/operator?filter=review")
+            stats = await client.get("/operator/stats?filter=all&since=0")
+            approved = await client.post(f"/operator/drafts/{draft_id}/approve",
+                                         data={"message": "Edited <reply>"},
+                                         headers={"HX-Request": "true"})
+            again_htmx = await client.post(f"/operator/drafts/{draft_id}/approve",
+                                           headers={"HX-Request": "true"})
+            again_plain = await client.post(f"/operator/drafts/{draft_id}/approve")
+            mock = await client.get("/mock/helpdesk")
+        return page, review, stats, approved, again_htmx, again_plain, mock, await _count(Delivery)
+
+    page, review, stats, approved, again_htmx, again_plain, mock, deliveries = db(scenario)
+    assert page.status_code == 200 and "T-1042" in page.text and "Approve &amp; send" in page.text
+    assert "Needs review" in review.text and "T-1042" in review.text
+    assert stats.status_code == 200 and 'id="stats"' in stats.text
+    assert approved.status_code == 200
+    assert 'id="ticket-T-1042"' in approved.text
+    assert "Edited &lt;reply&gt;" in approved.text and "Queued for delivery" in approved.text
+    assert again_htmx.status_code == 200 and "Approve &amp; send" not in again_htmx.text
+    assert again_plain.status_code == 409
+    assert mock.status_code == 200 and "Helpdesk mock" in mock.text
+    assert deliveries == 1

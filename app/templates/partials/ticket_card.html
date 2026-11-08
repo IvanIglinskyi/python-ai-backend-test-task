@@ -1,0 +1,102 @@
+{% set s = t.status_badge %}
+<article id="ticket-{{ t.key }}"
+         class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+         {% if t.live %}hx-get="/operator/tickets/{{ t.ticket_id }}/card" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+    <div class="flex items-center gap-3">
+      <div class="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-sm font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ t.initials }}</div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">{{ t.ticket_id }}</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium {{ s.classes }}">
+            <span class="h-1.5 w-1.5 rounded-full {{ s.dot }} {% if t.live %}animate-pulse{% endif %}"></span>{{ s.label }}
+          </span>
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">{{ t.customer_email }} · {{ t.updated }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% for d in t.drafts %}
+  <div class="grid gap-0 md:grid-cols-5 {% if not loop.last %}border-b border-slate-100 dark:border-slate-800{% endif %}">
+    <div class="border-slate-100 bg-slate-50/60 px-5 py-4 md:col-span-2 md:border-r dark:border-slate-800 dark:bg-slate-950/40">
+      <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Customer</div>
+      <p class="mt-2 whitespace-pre-line text-sm leading-relaxed">{{ d.customer_message }}</p>
+      {% if d.articles %}
+      <div class="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Knowledge base</div>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        {% for a in d.articles %}
+        <a href="{{ a.url }}" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 transition hover:ring-indigo-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
+          <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 012-2h5l5 5v9a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>{{ a.title }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="px-5 py-4 md:col-span-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Draft reply #{{ d.id }}
+          <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal {% if d.source == 'llm' %}bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+            {{ "AI model" if d.source == "llm" else "Static (no API key)" }}
+          </span>
+        </div>
+        <span class="text-xs font-medium {{ d.status_badge.text }}">{{ d.status_badge.label }}</span>
+      </div>
+
+      {% if d.status == "pending_review" %}
+      <form class="mt-3" hx-post="/operator/drafts/{{ d.id }}/approve" hx-target="#ticket-{{ t.key }}" hx-swap="outerHTML"
+            action="/operator/drafts/{{ d.id }}/approve" method="post">
+        <textarea name="message" rows="9"
+                  class="block w-full resize-y rounded-xl border-0 bg-slate-50 p-3 text-sm leading-relaxed ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 dark:bg-slate-950 dark:ring-slate-700 dark:focus:bg-slate-950">{{ d.body }}</textarea>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <button type="submit"
+                  class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <svg class="spinner h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+            Approve &amp; send
+          </button>
+          <button type="button"
+                  hx-post="/operator/drafts/{{ d.id }}/reject" hx-target="#ticket-{{ t.key }}" hx-swap="outerHTML"
+                  hx-confirm="Reject this draft? The customer will not receive it."
+                  class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 ring-1 ring-inset ring-slate-200 transition hover:bg-rose-50 hover:text-rose-700 hover:ring-rose-200 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-rose-950 dark:hover:text-rose-300">
+            Reject
+          </button>
+          <span class="ml-auto text-xs text-slate-400">Edits are sent exactly as written.</span>
+        </div>
+      </form>
+      {% else %}
+      <div class="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm leading-relaxed ring-1 ring-inset ring-slate-200 dark:bg-slate-950 dark:ring-slate-800 {% if d.status == 'rejected' %}text-slate-400 line-through decoration-slate-300{% endif %}">{{ d.sent_text }}</div>
+      {% endif %}
+
+      {% if d.delivery %}
+      {% set dl = d.delivery %}
+      <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2 text-sm {{ dl.badge.panel }}">
+        <span class="inline-flex items-center gap-1.5 font-medium">
+          <span class="h-2 w-2 rounded-full {{ dl.badge.dot }} {% if dl.live %}animate-pulse{% endif %}"></span>{{ dl.badge.label }}
+        </span>
+        <span class="text-xs opacity-80">{{ dl.attempts }} attempt{{ "s" if dl.attempts != 1 }}</span>
+        {% if dl.last_error %}<span class="text-xs opacity-80">last error: {{ dl.last_error }}</span>{% endif %}
+        {% if dl.state == "failed" %}
+        <button hx-post="/operator/deliveries/{{ dl.id }}/retry" hx-target="#ticket-{{ t.key }}" hx-swap="outerHTML"
+                class="ml-auto rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200 hover:bg-rose-50 dark:bg-slate-900 dark:text-rose-300 dark:ring-rose-900">
+          Retry delivery
+        </button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="flex items-center gap-3 px-5 py-6 text-sm text-slate-500 dark:text-slate-400">
+    {% if t.status == "draft_failed" %}
+      <span class="text-rose-600 dark:text-rose-400">The model did not answer after several attempts.</span>
+    {% else %}
+      <svg class="h-4 w-4 animate-spin text-indigo-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+      Searching the knowledge base and drafting a reply…
+    {% endif %}
+    <p class="ml-auto max-w-md truncate text-slate-400" title="{{ t.message }}">“{{ t.message }}”</p>
+  </div>
+  {% endfor %}
+</article>

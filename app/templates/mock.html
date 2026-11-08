@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Helpdesk mock · Lumenboard Support{% endblock %}
+{% block content %}
+<div>
+  <h1 class="text-2xl font-semibold tracking-tight">Helpdesk mock</h1>
+  <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+    Plays the external helpdesk: opens tickets by calling our webhook and receives the approved replies.
+    Replies fail with <code class="rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">503</code> {{ failure_pct }}% of the time
+    and answer after the client timeout {{ slow_pct }}% of the time, so retries and the idempotency key are exercised.
+  </p>
+</div>
+
+<div class="mt-8 grid gap-6 lg:grid-cols-5">
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-800 dark:bg-slate-900">
+    <h2 class="font-semibold">Open a ticket</h2>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sends <code class="text-xs">POST /webhooks/helpdesk</code>-equivalent event.</p>
+    <form method="post" action="/mock/helpdesk/tickets/form" class="mt-4 space-y-4">
+      <label class="block">
+        <span class="text-sm font-medium">Ticket ID</span>
+        <input name="ticket_id" required value="{{ suggested_id }}"
+               class="mt-1.5 block w-full rounded-lg border-0 bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 dark:bg-slate-950 dark:ring-slate-700">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Customer email</span>
+        <input name="customer_email" type="email" required value="user@example.com"
+               class="mt-1.5 block w-full rounded-lg border-0 bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 dark:bg-slate-950 dark:ring-slate-700">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Message</span>
+        <textarea id="message" name="message" rows="4" required
+                  class="mt-1.5 block w-full rounded-lg border-0 bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 dark:bg-slate-950 dark:ring-slate-700">Не можу експортувати звіт у PDF</textarea>
+      </label>
+      <div>
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Examples</span>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          {% for example in examples %}
+          <button type="button" onclick="document.getElementById('message').value = this.dataset.text"
+                  data-text="{{ example }}"
+                  class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-indigo-950">{{ example }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit"
+              class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
+        Send webhook
+      </button>
+    </form>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-3 dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+      <div>
+        <h2 class="font-semibold">Replies received by customers</h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400">One row per <code class="text-xs">Idempotency-Key</code> — duplicates are never stored.</p>
+      </div>
+      <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums dark:bg-slate-800">{{ replies|length }}</span>
+    </div>
+    <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for r in replies %}
+      <li class="px-5 py-4">
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="font-semibold">{{ r.ticket_id }}</span>
+          <span class="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">201 Created</span>
+          <code class="text-xs text-slate-400">{{ r.idempotency_key }}</code>
+          <span class="ml-auto text-xs text-slate-400">{{ r.created }}</span>
+        </div>
+        <p class="mt-2 line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">{{ r.message }}</p>
+      </li>
+      {% else %}
+      <li class="px-5 py-16 text-center text-sm text-slate-500 dark:text-slate-400">No replies yet. Approve a draft in the <a href="/operator" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">inbox</a>.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}
