@@ -397,3 +397,26 @@ def test_tick_endpoint_requires_cron_secret(db, monkeypatch) -> None:
     assert denied == 401
     assert allowed == 200
     assert body["drafts"] == 0
+
+
+def test_tick_picks_up_tickets_that_arrive_while_it_runs(db) -> None:
+    async def scenario():
+        from app.workers.tick import drain
+
+        await _ingest()
+        settings = get_settings().model_copy(
+            update={"llm_stub_min_delay": 1.5, "llm_stub_max_delay": 1.5})
+
+        async def late_ticket():
+            await asyncio.sleep(0.5)
+            await _ingest({**PAYLOAD, "event_id": "evt_late", "ticket_id": "T-late"})
+
+        transport = httpx.MockTransport(lambda request: httpx.Response(401))
+        async with httpx.AsyncClient(transport=transport) as client:
+            stats, _ = await asyncio.gather(
+                drain(settings, budget_seconds=120, client=client), late_ticket())
+        return stats
+
+    stats = db(scenario)
+    assert stats["drafts"] == 2
+    assert stats["pending"] == []

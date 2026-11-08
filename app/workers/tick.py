@@ -30,6 +30,8 @@ _KICK = text(
 )
 
 
+_RESET_KICK = text("UPDATE worker_kicks SET kicked_at = '-infinity'")
+
 _NEXT_DUE = {
     "drafts": text(
         "SELECT EXTRACT(EPOCH FROM min(available_at) - now()) FROM jobs "
@@ -76,36 +78,55 @@ async def drain(
     def remaining() -> float:
         return budget - (time.monotonic() - started)
 
-    async def wait_for_due(kind: str, guard: float) -> bool:
-        """Sleep a little if more work of this kind falls due in time; False to stop."""
+    busy = 0  # workers of this tick currently processing something
+
+    async def idle(kind: str, guard: float) -> bool:
+        """Nothing claimable now. Return True to look again, False to stop this worker.
+
+        Keep looking while a retry falls due within the budget, or while another
+        worker of this tick is busy (new tickets keep arriving during a burst).
+        """
         due = await next_due(kind)
-        if due is None or due > remaining() - guard:
-            return False
-        await asyncio.sleep(min(max(due, 0.2), 5.0))
-        return True
+        if due is not None and due <= remaining() - guard:
+            await asyncio.sleep(min(max(due, 0.2), 5.0))
+            return True
+        if busy > 0:
+            await asyncio.sleep(2.0)
+            return True
+        return False
 
     async def draft_worker(client: httpx.AsyncClient) -> None:
+        nonlocal busy
         guard = _draft_guard(settings)
         while remaining() > guard:
             async with factory() as session:
                 job = await drafting.claim_job(session, settings.job_lease_seconds)
             if job is None:
-                if await wait_for_due("drafts", guard):
+                if await idle("drafts", guard):
                     continue
                 return
-            await drafting.process_job(factory, client, settings, job)
+            busy += 1
+            try:
+                await drafting.process_job(factory, client, settings, job)
+            finally:
+                busy -= 1
             stats["drafts"] += 1
 
     async def delivery_worker(client: httpx.AsyncClient) -> None:
+        nonlocal busy
         guard = settings.delivery_timeout_seconds + 5
         while remaining() > guard:
             async with factory() as session:
                 item = await delivery.claim_delivery(session, settings.delivery_lease_seconds)
             if item is None:
-                if await wait_for_due("deliveries", guard):
+                if await idle("deliveries", guard):
                     continue
                 return
-            await delivery.process_delivery(factory, client, settings, item)
+            busy += 1
+            try:
+                await delivery.process_delivery(factory, client, settings, item)
+            finally:
+                busy -= 1
             stats["deliveries"] += 1
 
     async def run_all(http: httpx.AsyncClient) -> None:
@@ -120,6 +141,12 @@ async def drain(
         async with httpx.AsyncClient() as http:
             await run_all(http)
     stats["seconds"] = round(time.monotonic() - started, 2)
+
+    # Let the next webhook kick immediately. Done before the final check, so a
+    # ticket stored after this point always finds the debounce open.
+    async with factory() as session:
+        await session.execute(_RESET_KICK)
+        await session.commit()
     pending = [k for k in _NEXT_DUE if await next_due(k) is not None]
     stats["pending"] = pending
     if pending and base_url:
