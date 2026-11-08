@@ -20,11 +20,13 @@ from app.config import Settings, get_settings
 log = logging.getLogger("llm")
 
 SYSTEM_PROMPT = (
-    "Ти — агент підтримки продукту Lumenboard. Напиши коротку ввічливу чернетку "
-    "відповіді клієнту українською мовою. Спирайся лише на надані статті бази знань. "
-    "Наприкінці додай посилання на використані статті у форматі «Детальніше: <url>». "
-    "Якщо статті не відповідають на питання, чесно скажи, що передаєш звернення "
-    "спеціалісту, і не вигадуй функцій продукту."
+    "You are a support agent for Lumenboard, a dashboards and reporting product. "
+    "Write a short, friendly draft reply to the customer in English. "
+    "Use only the knowledge-base articles provided; do not invent features, prices or steps. "
+    "Give concrete steps when the articles contain them. "
+    "End with links to the articles you used, one per line, as 'Learn more: <url>'. "
+    "If the articles do not answer the question, say that you are passing the ticket "
+    "to a specialist and will follow up."
 )
 
 
@@ -45,12 +47,12 @@ def build_messages(message: str, articles: list[dict]) -> list[dict]:
             f"[{a['id']}] {a['title']}\nURL: {a['url']}\n{a['body']}" for a in articles
         )
     else:
-        kb = "Релевантних статей не знайдено."
+        kb = "No relevant articles found."
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"Звернення клієнта:\n{message}\n\nСтатті бази знань:\n{kb}",
+            "content": f"Customer message:\n{message}\n\nKnowledge-base articles:\n{kb}",
         },
     ]
 
@@ -58,15 +60,19 @@ def build_messages(message: str, articles: list[dict]) -> list[dict]:
 def static_draft(articles: list[dict]) -> str:
     if not articles:
         return (
-            "Вітаємо! Дякуємо за звернення. Ми передали ваше питання спеціалісту "
-            "підтримки Lumenboard і відповімо найближчим часом."
+            "Hi there,\n\n"
+            "Thanks for reaching out to Lumenboard Support. I've passed your question to a "
+            "specialist on our team, and we'll get back to you shortly.\n\n"
+            "Best regards,\nLumenboard Support"
         )
-    lines = ["Вітаємо! Дякуємо за звернення до підтримки Lumenboard.", ""]
+    lines = ["Hi there,", "", "Thanks for reaching out to Lumenboard Support. Here's what should help:", ""]
     for article in articles:
         lines.append(f"{article['title']}: {article['body']}")
-        lines.append(f"Детальніше: {article['url']}")
+        lines.append(f"Learn more: {article['url']}")
         lines.append("")
-    lines.append("Якщо це не допомогло, відповідайте на цей лист — ми допоможемо.")
+    lines.append("If this doesn't solve it, just reply to this message and we'll help further.")
+    lines.append("")
+    lines.append("Best regards,\nLumenboard Support")
     return "\n".join(lines)
 
 

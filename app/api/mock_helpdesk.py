@@ -56,10 +56,11 @@ async def open_ticket(
 
 
 EXAMPLES = [
-    "Не можу експортувати звіт у PDF",
-    "Як запросити нового учасника в робочий простір?",
-    "Звіт у CSV показує неправильний часовий пояс",
-    "Хочу перейти на інший тарифний план",
+    "I can't export my report to PDF",
+    "How do I invite a new member to my workspace?",
+    "My CSV export shows the wrong time zone",
+    "I want to switch to a different plan",
+    "How do I set up automatic dashboard refresh?",
 ]
 
 
