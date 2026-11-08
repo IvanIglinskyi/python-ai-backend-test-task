@@ -11,8 +11,12 @@ _STOP = {
     "with", "from", "this", "that", "into", "are", "was", "not", "but", "does", "doesn't", "don't",
     "have", "has", "our", "out", "all", "any", "get", "use", "want", "need", "please", "help",
     "hello", "thanks", "there", "they", "them", "would", "should", "could", "about", "only",
+    # Ukrainian: customers write in it, articles carry Ukrainian keywords.
+    "можу", "хочу", "мені", "мене", "мій", "моя", "моє", "мої", "свій", "свою", "своє", "будь",
+    "ласка", "чому", "який", "яка", "яке", "які", "коли", "також", "лише", "немає", "потрібно",
+    "треба", "привіт", "дякую", "добрий", "день", "але", "або", "щоб", "для", "так", "вже",
 }
-_WORD = re.compile(r"[a-z0-9']+")
+_WORD = re.compile(r"[a-z0-9'а-щьюяґєії]+")
 
 
 @lru_cache
@@ -42,15 +46,18 @@ def _tokens(text: str) -> set[str]:
 
 
 def search_articles(query: str, limit: int = 3) -> list[dict]:
-    """Lexical overlap search; titles count double. Eight articles need no vector index."""
+    """Lexical overlap search; titles and keywords count double.
+
+    Articles are English; `keywords_uk` lets Ukrainian tickets find them too.
+    Eight articles need no vector index.
+    """
     query_tokens = _tokens(query)
     if not query_tokens:
         return []
     scored: list[tuple[int, dict]] = []
     for article in load_articles():
-        score = 2 * len(query_tokens & _tokens(article["title"])) + len(
-            query_tokens & _tokens(article["body"])
-        )
+        strong = _tokens(f"{article['title']} {article.get('keywords_uk', '')}")
+        score = 2 * len(query_tokens & strong) + len(query_tokens & _tokens(article["body"]))
         if score:
             scored.append((score, article))
     if not scored:

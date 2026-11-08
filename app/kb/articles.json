@@ -2,41 +2,49 @@
   {
     "id": "export-pdf",
     "title": "Exporting a report to PDF",
-    "body": "Open the report, click Export and choose PDF. The file appears under Downloads within a minute. PDF export is available on the Team and Enterprise plans. The Free plan can only export CSV."
+    "body": "Open the report, click Export and choose PDF. The file appears under Downloads within a minute. PDF export is available on the Team and Enterprise plans. The Free plan can only export CSV.",
+    "keywords_uk": "експорт експортувати експортую вивантажити завантажити звіт звіту звіти пдф pdf файл друк"
   },
   {
     "id": "export-csv",
     "title": "Exporting a report to CSV",
-    "body": "In the report, click Export, then CSV. Files are encoded in UTF-8. Dates in the columns use the workspace time zone, which you can change in Settings, Workspace."
+    "body": "In the report, click Export, then CSV. Files are encoded in UTF-8. Dates in the columns use the workspace time zone, which you can change in Settings, Workspace.",
+    "keywords_uk": "експорт експортувати звіт звіту csv цсв таблиця часовий пояс час дата кодування"
   },
   {
     "id": "invite-members",
     "title": "Inviting team members",
-    "body": "The workspace owner opens Settings, Members, Invite. Enter an email address and pick a role: viewer, editor or admin. Invitations are valid for 7 days and can be resent from the same page."
+    "body": "The workspace owner opens Settings, Members, Invite. Enter an email address and pick a role: viewer, editor or admin. Invitations are valid for 7 days and can be resent from the same page.",
+    "keywords_uk": "запросити запрошення запросив учасник учасника учасників колега колегу команда додати користувача"
   },
   {
     "id": "roles",
     "title": "Roles and report access",
-    "body": "Viewers see dashboards but cannot edit them. Editors change reports and dashboards. Admins manage members and API keys. PDF export is allowed for editors and admins."
+    "body": "Viewers see dashboards but cannot edit them. Editors change reports and dashboards. Admins manage members and API keys. PDF export is allowed for editors and admins.",
+    "keywords_uk": "роль ролі доступ права переглядач редактор адміністратор редагувати редагування дозвіл"
   },
   {
     "id": "billing",
     "title": "Plans and billing",
-    "body": "The Free plan includes 3 dashboards and CSV export. Team adds PDF export, up to 20 members and shared filters. Enterprise adds SSO and a dedicated data region. To change your plan, open Settings, Billing. Invoices are sent to the workspace owner."
+    "body": "The Free plan includes 3 dashboards and CSV export. Team adds PDF export, up to 20 members and shared filters. Enterprise adds SSO and a dedicated data region. To change your plan, open Settings, Billing. Invoices are sent to the workspace owner.",
+    "keywords_uk": "тариф тарифний план оплата рахунок підписка змінити перейти ціна вартість безкоштовний"
   },
   {
     "id": "api-keys",
     "title": "API keys",
-    "body": "An admin creates a key in Settings, API. The key is shown only once, so store it safely. Send requests with the header Authorization: Bearer <key>. The Team plan allows 60 API requests per minute."
+    "body": "An admin creates a key in Settings, API. The key is shown only once, so store it safely. Send requests with the header Authorization: Bearer <key>. The Team plan allows 60 API requests per minute.",
+    "keywords_uk": "ключ ключа ключі api апі токен інтеграція запити ліміт"
   },
   {
     "id": "sso",
     "title": "Single sign-on (SSO)",
-    "body": "SSO is available on the Enterprise plan. An admin enables SAML in Settings, Security and uploads the identity provider metadata. Once enabled, password login is turned off for the company domain."
+    "body": "SSO is available on the Enterprise plan. An admin enables SAML in Settings, Security and uploads the identity provider metadata. Once enabled, password login is turned off for the company domain.",
+    "keywords_uk": "sso saml єдиний вхід авторизація логін пароль безпека домен"
   },
   {
     "id": "refresh",
     "title": "Data refresh and automatic updates",
-    "body": "Data sources refresh automatically every hour. The Refresh button on a dashboard queues an extra refresh, at most once every 10 minutes. While a refresh runs, each card shows the time of the last successful update."
+    "body": "Data sources refresh automatically every hour. The Refresh button on a dashboard queues an extra refresh, at most once every 10 minutes. While a refresh runs, each card shows the time of the last successful update.",
+    "keywords_uk": "оновлення оновити оновлюються автоматичне автоматично дашборд дашборду дані даних синхронізація"
   }
 ]

@@ -227,3 +227,16 @@ def test_provider_429_is_a_throttle_not_a_failure() -> None:
     with pytest.raises(LLMError) as info:
         asyncio.run(scenario())
     assert info.value.throttled is True and info.value.retry_after == 3
+
+
+def test_search_understands_ukrainian_tickets() -> None:
+    cases = {
+        "Не можу експортувати звіт у PDF": "export-pdf",  # the example from the assignment
+        "Як запросити нового учасника в робочий простір?": "invite-members",
+        "Хочу змінити тарифний план": "billing",
+        "Як налаштувати автоматичне оновлення дашборду?": "refresh",
+        "Чи може переглядач редагувати звіти?": "roles",
+    }
+    for question, expected in cases.items():
+        assert search_articles(question)[0]["id"] == expected, question
+    assert search_articles("Хочу видалити акаунт") == []  # no such article: no false citation
