@@ -55,6 +55,10 @@
 
 Воркер забирає роботу так: `UPDATE jobs ... WHERE id = (SELECT id ... FOR UPDATE SKIP LOCKED LIMIT 1)` для `status IN (queued, running)` і `available_at <= now()`. Для `running` поле `available_at` — це кінець лізингу: роботу впалого воркера забирає інший. `attempts` — fencing token, результат записує лише останній власник. Доставки забираються так само з таблиці `deliveries`.
 
+## Serverless (Vercel)
+
+Окремого процесу воркера немає. `/internal/tick` (`Authorization: Bearer CRON_SECRET`) виконує той самий код забирання і обробки до `TICK_SECONDS`. Вебхук і рішення оператора після відповіді запускають `tick` окремим викликом, не частіше ніж раз на `KICK_INTERVAL_SECONDS` (`worker_kicks`). Вебхук, як і раніше, лише пише в базу.
+
 ## Реалізація
 
 | Пункт | Де |

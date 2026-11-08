@@ -9,6 +9,18 @@
 
 Стек: Python 3.12, FastAPI, SQLAlchemy 2 (async) + asyncpg, PostgreSQL 16, httpx, Docker Compose.
 
+## Посилання (Vercel)
+
+| Що | URL |
+|---|---|
+| Вебхук | `POST https://python-ai-backend-test-task.vercel.app/webhooks/helpdesk` |
+| Інтерфейс оператора | https://python-ai-backend-test-task.vercel.app/operator |
+| Мок хелпдеску (створити звернення, побачити відповіді клієнту) | https://python-ai-backend-test-task.vercel.app/mock/helpdesk |
+| Здоров’я | https://python-ai-backend-test-task.vercel.app/health |
+| Swagger | https://python-ai-backend-test-task.vercel.app/docs |
+
+На деплої працює режим без API-ключа і нестабільний мок (20 % відповідей `503`, 10 % повільних). Тому біля доставки іноді видно 2–3 спроби, але клієнт отримує одну відповідь.
+
 ## Швидкий старт
 
 Потрібні лише Docker і Docker Compose.
@@ -208,19 +220,20 @@ api/index.py, vercel.json  точка входу Vercel
 
 ### Vercel (основний)
 
-Публічні адреси: див. розділ «Посилання» вгорі, коли деплой виконано.
-
 На Vercel немає постійно запущеного процесу, тому воркер працює як обмежена в часі функція:
 
 - `/internal/tick` обробляє черги чернеток і доставок до `TICK_SECONDS` (240 с, `maxDuration` функції 300 с). Нову роботу функція бере, лише якщо встигне її завершити. Лізинги в PostgreSQL роблять одночасні виклики `tick` безпечними, а роботу, перервану на середині, підхопить наступний виклик.
+- Поки `tick` працює, його вільні воркери щосекунди підхоплюють нові звернення. Повтори, що настають у межах бюджету, `tick` дочікується сам. Якщо після завершення ще лишилася робота, він запускає наступний `tick`.
 - Вебхук, створення звернення через мок, підтвердження і повтор доставки після відповіді клієнту запускають `tick` окремим викликом через `BackgroundTasks`. Запуск відбувається не частіше ніж раз на `KICK_INTERVAL_SECONDS` (таблиця `worker_kicks`), тож у пік у 500 звернень функції не множаться. Сам вебхук, як і раніше, лише пише в базу.
 - Запасний запуск: Vercel Cron раз на добу (ліміт плану Hobby) і GitHub Actions `.github/workflows/tick.yml` кожні 5 хвилин. Вони підхоплюють повтори з backoff і втрачені запуски.
 - Підключення до бази без пулу (`NullPool`) і без кешу prepared statements, тож працює з Neon pooler / PgBouncer. Параметри `sslmode` і `channel_binding` з URL Neon перетворюються на параметри asyncpg.
 
 Кроки:
 
+Vercel сам розпізнає FastAPI (`api/index.py`). Rewrite у `vercel.json` не потрібен: з ним усі запити приходили б у застосунок як `/api/index`.
+
 1. `npm i -g vercel` і `vercel login`.
-2. У корені репозиторію: `vercel link`, потім у Dashboard → Storage → Create → **Neon Postgres** і підключити базу до проєкту. Vercel сам додасть `DATABASE_URL`.
+2. У корені репозиторію: `vercel link`, потім `vercel integration add neon` (або Dashboard → Storage → Neon) і підключити базу до проєкту. Vercel сам додасть `DATABASE_URL`.
 3. Змінні: `vercel env add CRON_SECRET production` (довгий випадковий рядок), за бажанням `LLM_API_KEY`.
 4. `vercel deploy --prod`.
 5. Для запасного розкладу додайте в GitHub секрети `TICK_URL=https://<app>.vercel.app/internal/tick` і `CRON_SECRET`.
