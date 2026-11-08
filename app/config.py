@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,7 +20,18 @@ class Settings(BaseSettings):
     llm_stub_min_delay: float = 5.0
     llm_stub_max_delay: float = 30.0
 
+    @field_validator("database_url")
+    @classmethod
+    def _asyncpg_driver(cls, value: str) -> str:
+        # Hosting providers hand out postgres:// URLs; SQLAlchemy needs the async driver.
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+asyncpg://" + value[len(prefix):]
+        return value
+
     # Worker.
+    # Run the worker loops inside the API process (for single-container hosting).
+    embedded_worker: bool = False
     worker_concurrency: int = 20
     delivery_concurrency: int = 4
     worker_poll_seconds: float = 1.0

@@ -58,6 +58,22 @@ async def _idle(stop: asyncio.Event, seconds: float) -> None:
         pass
 
 
+async def run_workers(settings: Settings, stop: asyncio.Event) -> None:
+    """All worker loops until `stop` is set. Also used by EMBEDDED_WORKER in the API."""
+    mode = "live" if settings.llm_api_key else "keyless (static drafts)"
+    log.info("worker started: %s draft loops, %s delivery loops, LLM %s",
+             settings.worker_concurrency, settings.delivery_concurrency, mode)
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        tasks = [
+            *(asyncio.create_task(draft_loop(i, settings, client, stop))
+              for i in range(settings.worker_concurrency)),
+            *(asyncio.create_task(delivery_loop(i, settings, client, stop))
+              for i in range(settings.delivery_concurrency)),
+        ]
+        await asyncio.gather(*tasks)
+    log.info("worker stopped")
+
+
 async def run() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = get_settings()
@@ -71,19 +87,7 @@ async def run() -> None:
             loop.add_signal_handler(sig, stop.set)
         except (NotImplementedError, RuntimeError):  # Windows
             pass
-
-    mode = "live" if settings.llm_api_key else "keyless (static drafts)"
-    log.info("worker started: %s draft loops, %s delivery loops, LLM %s",
-             settings.worker_concurrency, settings.delivery_concurrency, mode)
-    async with httpx.AsyncClient(follow_redirects=False) as client:
-        tasks = [
-            *(asyncio.create_task(draft_loop(i, settings, client, stop))
-              for i in range(settings.worker_concurrency)),
-            *(asyncio.create_task(delivery_loop(i, settings, client, stop))
-              for i in range(settings.delivery_concurrency)),
-        ]
-        await asyncio.gather(*tasks)
-    log.info("worker stopped")
+    await run_workers(settings, stop)
 
 
 def main() -> None:
