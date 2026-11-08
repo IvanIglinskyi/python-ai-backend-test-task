@@ -7,7 +7,7 @@ A backend that drafts customer-support replies with an LLM. The product in the k
 3. An operator sees tickets with their drafts at `/operator`, can edit the text, and approves or rejects it.
 4. An approved reply is posted to the helpdesk `reply_url` exactly once. Retries after 5xx or a timeout reuse the same `Idempotency-Key`.
 
-Stack: Python 3.12, FastAPI, SQLAlchemy 2 (async) + asyncpg, PostgreSQL 16, httpx, Jinja2 + Tailwind + htmx for the UI, Docker Compose.
+Stack: Python 3.12, FastAPI, SQLAlchemy 2 (async) + asyncpg, PostgreSQL 16, httpx, Jinja2 + Tailwind + htmx for the UI (vendored under `app/static/vendor`, no CDN at runtime), Docker Compose.
 
 ## Live demo (Vercel)
 
@@ -42,6 +42,8 @@ Three containers start: `db` (PostgreSQL), `api` (FastAPI on port 8000) and `wor
 | Health | http://localhost:8000/health → `200 OK` |
 | Swagger | http://localhost:8000/docs |
 | PostgreSQL | `localhost:5432`, user, password and database: `helpdesk` |
+
+Ports are published on `127.0.0.1` only. With Docker Desktop on WSL2, `localhost` resolves to `::1` first and IPv6 forwarding may hang; binding to IPv4 makes `localhost` fall back instantly and keeps the database off the LAN.
 
 Stop with `docker compose down`; add `-v` to drop the data as well.
 
@@ -135,7 +137,10 @@ Without `TEST_DATABASE_URL` the integration tests are skipped and the unit tests
 ```bash
 pip install playwright && python -m playwright install chromium
 python e2e/ui_check.py https://python-ai-backend-test-task.vercel.app
+python e2e/ui_check.py http://localhost:8000 http://api:8000   # against docker compose
 ```
+
+The second argument is how the worker container reaches the mock: inside compose `localhost` is the worker itself.
 
 ## Architecture
 

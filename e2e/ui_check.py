@@ -1,6 +1,12 @@
 """Click through every button of the deployed app with a real browser.
 
-Usage: python ui_check.py https://python-ai-backend-test-task.vercel.app
+Usage: python ui_check.py <base-url> [reply-base-url]
+
+  python e2e/ui_check.py https://python-ai-backend-test-task.vercel.app
+  python e2e/ui_check.py http://localhost:8000 http://api:8000   # docker compose
+
+reply-base-url is how the worker reaches the mock; inside docker compose that
+is http://api:8000, because "localhost" in the worker container is the worker.
 """
 
 import json
@@ -11,6 +17,7 @@ import urllib.request
 from playwright.sync_api import Page, expect, sync_playwright
 
 BASE = sys.argv[1].rstrip("/")
+REPLY_BASE = (sys.argv[2] if len(sys.argv) > 2 else BASE).rstrip("/")
 RUN = str(int(time.time()))[-5:]
 results: list[tuple[str, bool, str]] = []
 console_errors: list[str] = []
@@ -33,7 +40,7 @@ def post_webhook(ticket_id: str, message: str, reply_ticket: str | None = None) 
     body = json.dumps({
         "event_id": f"evt_ui_{ticket_id}_{time.time_ns()}", "ticket_id": ticket_id,
         "customer_email": "qa@example.com", "message": message,
-        "reply_url": f"{BASE}/mock/helpdesk/tickets/{reply_ticket or ticket_id}/replies",
+        "reply_url": f"{REPLY_BASE}/mock/helpdesk/tickets/{reply_ticket or ticket_id}/replies",
     }).encode()
     req = urllib.request.Request(f"{BASE}/webhooks/helpdesk", data=body,
                                  headers={"content-type": "application/json"})
