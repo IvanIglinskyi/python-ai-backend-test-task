@@ -128,6 +128,15 @@ TEST_DATABASE_URL=postgresql+asyncpg://helpdesk:helpdesk@localhost:5432/helpdesk
 
 Without `TEST_DATABASE_URL` the integration tests are skipped and the unit tests still run.
 
+### Browser check
+
+`e2e/ui_check.py` clicks every button of a running deployment in Chromium (Playwright): header navigation, opening a ticket from the mock, the self-updating card, knowledge-base links, editing and approving a draft, the new-ticket banner, Reject with confirmation, a failed delivery and **Retry delivery**, filter tabs, Refresh, the Help Center, the 390 px mobile layout and the absence of console errors.
+
+```bash
+pip install playwright && python -m playwright install chromium
+python e2e/ui_check.py https://python-ai-backend-test-task.vercel.app
+```
+
 ## Architecture
 
 ```
