@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: helpdesk
       POSTGRES_DB: helpdesk
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
@@ -29,7 +29,7 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment: *app-env
     restart: unless-stopped
     depends_on:
