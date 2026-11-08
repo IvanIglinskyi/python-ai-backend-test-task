@@ -1,7 +1,8 @@
 import secrets
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
+from app.api.deps import public_base_url
 from app.config import get_settings
 from app.workers.tick import drain
 
@@ -18,7 +19,7 @@ def _authorize(authorization: str | None) -> None:
 
 # GET for Vercel Cron, POST for kicks and external schedulers.
 @router.api_route("/tick", methods=["GET", "POST"])
-async def tick(authorization: str | None = Header(default=None)) -> dict:
+async def tick(request: Request, authorization: str | None = Header(default=None)) -> dict:
     """Drain the draft and delivery queues for up to TICK_SECONDS."""
     _authorize(authorization)
-    return await drain(get_settings())
+    return await drain(get_settings(), base_url=public_base_url(request))

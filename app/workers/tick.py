@@ -30,6 +30,25 @@ _KICK = text(
 )
 
 
+_NEXT_DUE = {
+    "drafts": text(
+        "SELECT EXTRACT(EPOCH FROM min(available_at) - now()) FROM jobs "
+        "WHERE kind = 'generate_draft' AND status IN ('queued', 'running')"
+    ),
+    "deliveries": text(
+        "SELECT EXTRACT(EPOCH FROM min(available_at) - now()) FROM deliveries "
+        "WHERE state IN ('pending', 'in_flight')"
+    ),
+}
+
+
+async def next_due(kind: str) -> float | None:
+    """Seconds until the next draft job or delivery becomes claimable; None if there is none."""
+    async with get_session_factory()() as session:
+        value = await session.scalar(_NEXT_DUE[kind])
+    return None if value is None else max(float(value), 0.0)
+
+
 def _draft_guard(settings: Settings) -> float:
     """Seconds one draft may take; do not start a job with less time left."""
     if settings.llm_api_key:
@@ -41,7 +60,13 @@ async def drain(
     settings: Settings,
     budget_seconds: float | None = None,
     client: httpx.AsyncClient | None = None,
+    base_url: str | None = None,
 ) -> dict:
+    """Process due work; wait for retries that fall due within the budget.
+
+    When work is still pending at the end (a backoff longer than the budget,
+    or a lease held by another tick), the tick starts the next one via kick().
+    """
     await init_models()
     budget = budget_seconds if budget_seconds is not None else settings.tick_seconds
     started = time.monotonic()
@@ -51,20 +76,34 @@ async def drain(
     def remaining() -> float:
         return budget - (time.monotonic() - started)
 
+    async def wait_for_due(kind: str, guard: float) -> bool:
+        """Sleep a little if more work of this kind falls due in time; False to stop."""
+        due = await next_due(kind)
+        if due is None or due > remaining() - guard:
+            return False
+        await asyncio.sleep(min(max(due, 0.2), 5.0))
+        return True
+
     async def draft_worker(client: httpx.AsyncClient) -> None:
-        while remaining() > _draft_guard(settings):
+        guard = _draft_guard(settings)
+        while remaining() > guard:
             async with factory() as session:
                 job = await drafting.claim_job(session, settings.job_lease_seconds)
             if job is None:
+                if await wait_for_due("drafts", guard):
+                    continue
                 return
             await drafting.process_job(factory, client, settings, job)
             stats["drafts"] += 1
 
     async def delivery_worker(client: httpx.AsyncClient) -> None:
-        while remaining() > settings.delivery_timeout_seconds + 5:
+        guard = settings.delivery_timeout_seconds + 5
+        while remaining() > guard:
             async with factory() as session:
                 item = await delivery.claim_delivery(session, settings.delivery_lease_seconds)
             if item is None:
+                if await wait_for_due("deliveries", guard):
+                    continue
                 return
             await delivery.process_delivery(factory, client, settings, item)
             stats["deliveries"] += 1
@@ -81,6 +120,10 @@ async def drain(
         async with httpx.AsyncClient() as http:
             await run_all(http)
     stats["seconds"] = round(time.monotonic() - started, 2)
+    pending = [k for k in _NEXT_DUE if await next_due(k) is not None]
+    stats["pending"] = pending
+    if pending and base_url:
+        stats["next_tick"] = await kick(base_url, settings)
     log.info("tick done: %s", stats)
     return stats
 
