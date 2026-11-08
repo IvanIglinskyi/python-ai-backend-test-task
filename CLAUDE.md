@@ -1,14 +1,14 @@
 # Claude / Cursor
 
-Працюй за `AGENTS.md` і `SPEC.md`.
+Follow `AGENTS.md` and `SPEC.md`.
 
-Сервіс — FastAPI і PostgreSQL. Вебхук лише зберігає подію. Модель викликає воркер. Відповідь клієнту йде після підтвердження оператора і лише один раз.
+The service is FastAPI and PostgreSQL. The webhook only stores the event. The worker calls the model. A reply goes to the customer only after the operator approves it, and only once.
 
-Не викликай LLM у процесі HTTP-запиту вебхука. Не втрачай `event_id` при повторній доставці.
+Never call the LLM inside the webhook's HTTP request. Never lose an `event_id` on redelivery.
 
-Коротко про правила, які легко порушити (деталі в `AGENTS.md`):
+The rules that are easiest to break (details in `AGENTS.md`):
 
-- Коміти від `IvanIglinskyi`, без рядків `Co-Authored-By` і будь-якої атрибуції AI. Невеликі логічні коміти, без squash.
-- Секрети (`LLM_API_KEY`, `CRON_SECRET`, `DATABASE_URL`) не потрапляють у git, у вивід команд і в інструкції.
-- 429 від провайдера LLM — це очікування, а не помилка: спроба не витрачається.
-- Інтерфейс і база знань англійською; клієнти можуть писати українською.
+- Commits are authored by `IvanIglinskyi`, with no `Co-Authored-By` lines or any other AI attribution. Small logical commits, no squashing.
+- Secrets (`LLM_API_KEY`, `CRON_SECRET`, `DATABASE_URL`) never go into git, command output or instructions.
+- A `429` from the LLM provider means "wait", not "fail": it does not spend an attempt.
+- The UI and the knowledge base are in English; customers may write in Ukrainian.

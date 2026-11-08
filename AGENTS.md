@@ -1,42 +1,42 @@
-# Агент репозиторію
+# Repository agent
 
-Цей репозиторій — тестове завдання: бекенд чернеток підтримки для продукту Lumenboard.
+This repository is a take-home assignment: a support-draft backend for the Lumenboard product.
 
-Перед зміною вебхука, черги, LLM або доставки прочитай `SPEC.md`. Інваріанти звідти важливіші за локальну зручність.
+Read `SPEC.md` before changing the webhook, the queue, the LLM client or delivery. Its invariants outrank local convenience.
 
-Код продукту лежить у `app/`. Каталог `helpdesk-builder/` — окремий Agent SDK агент. Не перенось у нього FastAPI і не клади секрети в інструкції.
+Product code lives in `app/`. `helpdesk-builder/` is a separate Agent SDK agent. Do not move FastAPI into it and do not put secrets into its instructions.
 
-Поки крок не закритий тестом або перевіркою `GET /health`, не позначай завдання виконаним. Коміти роби лише коли про це прямо попросили, без squash історії.
+Do not mark a step done until a test or a `GET /health` check covers it. Commit only when explicitly asked, and never squash history.
 
-## Коміти
+## Commits
 
-- Автор і комітер — `IvanIglinskyi` (`git config user.name`). Не додавай `Co-Authored-By`, «Generated with …» чи іншу атрибуцію AI ні в коміти, ні в PR.
-- Невеликі логічні коміти: окремо фіча, виправлення, тести, документація. Повідомлення англійською, у тілі — чому, а не лише що.
-- Перед комітом: робоча копія без сторонніх файлів, `.env`, `.env.local`, `.vercel/` не потрапляють у git.
+- Author and committer are `IvanIglinskyi` (`git config user.name`). Do not add `Co-Authored-By`, "Generated with …" or any other AI attribution to commits or PRs.
+- Small logical commits: feature, fix, tests and docs separately. Messages in English; the body explains why, not only what.
+- Before committing, keep the working tree clean: `.env`, `.env.local` and `.vercel/` never go into git.
 
-## Перевірка
+## Verification
 
-- `python -m pytest` — юніт-тести без бази (інтеграційні пропускаються без `TEST_DATABASE_URL`).
-- `docker compose run --rm tests` — увесь набір з PostgreSQL в окремій базі `helpdesk_test`.
-- `python e2e/ui_check.py <url> [reply-base-url]` — Playwright натискає кожну кнопку. Для compose другий аргумент `http://api:8000`.
-- CI (`.github/workflows/tests.yml`) ганяє той самий набір на `postgres:16` при кожному push.
-- Після змін у UI запускай `e2e/ui_check.py`: тести на рівні HTTP не ловлять проблем верстки (наприклад, переповнення на 390 px).
+- `python -m pytest` — unit tests without a database (integration tests are skipped without `TEST_DATABASE_URL`).
+- `docker compose run --rm tests` — the full suite against PostgreSQL in a separate `helpdesk_test` database.
+- `python e2e/ui_check.py <url> [reply-base-url]` — Playwright clicks every button. Against compose, pass `http://api:8000` as the second argument.
+- CI (`.github/workflows/tests.yml`) runs the same suite on `postgres:16` on every push.
+- After UI changes, run `e2e/ui_check.py`: HTTP-level tests do not catch layout problems (for example, overflow at 390 px).
 
-## Секрети й деплой
+## Secrets and deployment
 
-- Ключі живуть лише в `.env` (локально, в ігнорі) і в змінних оточення Vercel. Не друкуй їх у вивід команд; перевіряй хіба довжину чи префікс.
-- Продакшен: `npx vercel deploy --prod` з кореня. Нові змінні Vercel підхоплює лише після деплою.
-- `vercel.json` без rewrite: Vercel сам розпізнає FastAPI, а rewrite перетворює кожен шлях на `/api/index`.
-- Масове видалення даних у продакшн-базі — лише з явного дозволу користувача.
+- Keys live only in `.env` (local, git-ignored) and in Vercel environment variables. Never print them; check length or prefix at most.
+- Production: `npx vercel deploy --prod` from the repository root. Vercel picks up new variables only on the next deploy.
+- `vercel.json` has no rewrite: Vercel detects FastAPI itself, and a rewrite turns every path into `/api/index`.
+- Bulk deletes in the production database only with the user's explicit permission.
 
-## Інтерфейс
+## UI
 
-- Jinja2 у `app/templates`, Tailwind і htmx. Бібліотеки й шрифт лежать у `app/static/vendor`; не повертай CDN — на повільній мережі сторінка чекала їх ~30 с.
-- Текст інтерфейсу й статті бази знань англійською. Клієнти можуть писати українською: пошук розуміє кирилицю через `keywords_uk` у статтях.
-- Кожна дія працює і через htmx (повертає картку), і без JavaScript (303 на `/operator`).
+- Jinja2 in `app/templates`, Tailwind and htmx. The libraries and the font are vendored in `app/static/vendor`; do not go back to CDNs — on a slow network the page waited ~30 s for them.
+- UI text and knowledge-base articles are in English. Customers may write in Ukrainian: search understands Cyrillic through `keywords_uk` in the articles.
+- Every action works both through htmx (returns the card) and without JavaScript (303 to `/operator`).
 
-## Локальне середовище (Windows)
+## Local environment (Windows)
 
-- `docker compose` публікує порти на `127.0.0.1`: у Docker Desktop на WSL2 `localhost` спершу йде в `::1`, і IPv6-проброс зависав.
-- У Git Bash шляхи на кшталт `/health` в аргументах перетворюються на `C:/Program Files/Git/health`; для таких команд став `MSYS_NO_PATHCONV=1`.
-- Кирилицю в тілі запиту передавай файлом (`--data-binary @file.json`), а не аргументом командного рядка.
+- `docker compose` publishes ports on `127.0.0.1`: with Docker Desktop on WSL2, `localhost` goes to `::1` first and the IPv6 port forward hung.
+- In Git Bash, path-like arguments such as `/health` become `C:/Program Files/Git/health`; set `MSYS_NO_PATHCONV=1` for such commands.
+- Send Cyrillic request bodies from a file (`--data-binary @file.json`), not as a command-line argument.

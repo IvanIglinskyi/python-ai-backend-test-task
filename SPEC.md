@@ -1,20 +1,20 @@
-# Специфікація: чернетки підтримки Lumenboard
+# Specification: Lumenboard support drafts
 
-Стек: FastAPI, PostgreSQL 16, Docker Compose. Один процес приймає HTTP, другий (`python -m app.workers.runner`) забирає роботу з бази.
+Stack: FastAPI, PostgreSQL 16, Docker Compose. One process serves HTTP; another (`python -m app.workers.runner`) takes work from the database.
 
-## Інваріанти
+## Invariants
 
-1. `POST /webhooks/helpdesk` відповідає швидше ніж за 2 секунди. У запиті немає виклику LLM.
-2. Подія зберігається до відповіді вебхука. Повтор і паралельна доставка з тим самим `event_id` дають один рядок `webhook_events` і одну роботу `jobs`.
-3. Звернення не відкидаються, коли воркер зайнятий. Пік — до 500 подій за 10 хвилин. Черга живе в PostgreSQL.
-4. Викликів LLM не більше 60 на хвилину на весь сервіс. Якщо провайдер відповідає `429`, усі виклики зупиняються до кінця `Retry-After` (`llm_pause`), а робота повертається в чергу без витрати спроби: обмеження провайдера не робить звернення `draft_failed`.
-5. Без `LLM_API_KEY` клієнт усе одно робить HTTP-запит до провайдера, ігнорує тіло відповіді і після затримки 5–30 секунд зберігає статичну чернетку. Далі система працює з нею так само, як із живою.
-6. Клієнт отримує підтверджену відповідь один раз. Повторна доставка після 5xx або таймауту йде з тим самим `Idempotency-Key`. Рядок `deliveries` у стані `sent` більше не відправляється.
-7. `GET /health` завжди віддає `200` і текст `OK`.
+1. `POST /webhooks/helpdesk` answers in under 2 seconds. No LLM call happens in the request.
+2. The event is stored before the webhook responds. A redelivery or a concurrent delivery with the same `event_id` yields one `webhook_events` row and one `jobs` row.
+3. Tickets are not dropped while the worker is busy. Peak load is up to 500 events in 10 minutes. The queue lives in PostgreSQL.
+4. At most 60 LLM calls per minute for the whole service. When the provider answers `429`, all calls stop until `Retry-After` ends (`llm_pause`), and the job goes back to the queue without spending an attempt: provider throttling never turns a ticket into `draft_failed`.
+5. Without `LLM_API_KEY` the client still makes the HTTP request to the provider, ignores the response body and, after a 5–30 second delay, stores a static draft. From there the system treats it exactly like a live one.
+6. The customer receives an approved reply once. Redelivery after a 5xx or a timeout uses the same `Idempotency-Key`. A `deliveries` row in state `sent` is never sent again.
+7. `GET /health` always returns `200` and the text `OK`.
 
-## Контракт хелпдеску
+## Helpdesk contract
 
-Вхід, `POST /webhooks/helpdesk`:
+Inbound, `POST /webhooks/helpdesk`:
 
 ```json
 {
@@ -26,24 +26,24 @@
 }
 ```
 
-Відповідь клієнту, `POST <reply_url>`:
+Reply to the customer, `POST <reply_url>`:
 
 ```json
 {
   "ticket_id": "T-1042",
-  "message": "Щоб експортувати звіт у PDF, відкрийте..."
+  "message": "To export a report to PDF, open..."
 }
 ```
 
-Успіх хелпдеску: `201`. Заголовок `Idempotency-Key` обов’язковий. МОК уже вимагає його на `POST /mock/helpdesk/tickets/{ticket_id}/replies` і не пише другий рядок для того самого ключа.
+Helpdesk success: `201`. The `Idempotency-Key` header is required. The mock requires it on `POST /mock/helpdesk/tickets/{ticket_id}/replies` and never stores a second row for the same key.
 
-## База знань
+## Knowledge base
 
-Вісім статей англійською у `app/kb/articles.json`, сервіс віддає їх як Help Center на `/kb/<id>`; посилання в чернетках будуються від `PUBLIC_BASE_URL`. Пошук лексичний, `app/kb/search.py`: заголовок і `keywords_uk` важать удвічі більше, слабкі збіги відкидаються. `keywords_uk` дає змогу знаходити статті за українськими зверненнями. Окремий векторний індекс не потрібен.
+Eight English articles in `app/kb/articles.json`, served as a Help Center at `/kb/<id>`; links in drafts are built from `PUBLIC_BASE_URL`. Search is lexical, `app/kb/search.py`: the title and `keywords_uk` weigh double, weak matches are dropped. `keywords_uk` lets Ukrainian tickets find the articles. No separate vector index is needed.
 
-## Статуси
+## Statuses
 
-`tickets.status`: `queued`, далі `drafting`, `pending_review`, `approved`, `rejected`, `sending`, `sent`, `send_failed`. `draft_failed` — LLM не відповів після `JOB_MAX_ATTEMPTS` спроб; оператор повертає звернення в чергу кнопкою Retry drafting.
+`tickets.status`: `queued`, then `drafting`, `pending_review`, `approved`, `rejected`, `sending`, `sent`, `send_failed`. `draft_failed` — the LLM did not answer within `JOB_MAX_ATTEMPTS` attempts; the operator puts the ticket back into the queue with Retry drafting.
 
 `drafts.status`: `pending_review`, `approved`, `rejected`.
 
@@ -51,37 +51,37 @@
 
 `jobs.status`: `queued`, `running`, `done`, `failed`.
 
-## Черга
+## Queue
 
-Воркер забирає роботу так: `UPDATE jobs ... WHERE id = (SELECT id ... FOR UPDATE SKIP LOCKED LIMIT 1)` для `status IN (queued, running)` і `available_at <= now()`. Для `running` поле `available_at` — це кінець лізингу: роботу впалого воркера забирає інший. `attempts` — fencing token, результат записує лише останній власник. Доставки забираються так само з таблиці `deliveries`.
+The worker claims work with `UPDATE jobs ... WHERE id = (SELECT id ... FOR UPDATE SKIP LOCKED LIMIT 1)` for `status IN (queued, running)` and `available_at <= now()`. For `running`, `available_at` is the end of the lease: another worker takes over the job of a crashed one. `attempts` is a fencing token; only the latest owner writes the result. Deliveries are claimed the same way from `deliveries`.
 
 ## Serverless (Vercel)
 
-Окремого процесу воркера немає. `/internal/tick` (`Authorization: Bearer CRON_SECRET`) виконує той самий код забирання і обробки до `TICK_SECONDS`. Вебхук і рішення оператора після відповіді запускають `tick` окремим викликом, не частіше ніж раз на `KICK_INTERVAL_SECONDS` (`worker_kicks`). Вебхук, як і раніше, лише пише в базу.
+There is no separate worker process. `/internal/tick` (`Authorization: Bearer CRON_SECRET`) runs the same claim-and-process code for up to `TICK_SECONDS`. After responding, the webhook and operator actions start a tick in a separate invocation, at most once per `KICK_INTERVAL_SECONDS` (`worker_kicks`). The webhook still only writes to the database.
 
 ## LLM
 
-OpenAI-сумісний `chat/completions` (перевірено з Groq, `qwen/qwen3.8-27b`). Промпт вимагає простий текст, фіксований підпис і рядки `Learn more: <url>`; клієнт додатково прибирає Markdown і блоки `<think>`, бо хелпдеск показує сирий текст. Помилки, крім `429`, повторюються з backoff до `JOB_MAX_ATTEMPTS`.
+OpenAI-compatible `chat/completions` (verified with Groq, `qwen/qwen3.8-27b`). The prompt asks for plain text, a fixed sign-off and `Learn more: <url>` lines; the client also strips Markdown and `<think>` blocks because the helpdesk shows raw text. Errors other than `429` are retried with backoff up to `JOB_MAX_ATTEMPTS`.
 
-## Інтерфейс оператора
+## Operator UI
 
-`/operator`: лічильники, фільтри, картки звернень. Підтвердити (з редагуванням тексту), відхилити, повторити доставку, повторити генерацію. Через htmx дія повертає оновлену картку, без JavaScript — 303 на `/operator`. Порожній текст відповіді не приймається (`422`).
+`/operator`: counters, filters, ticket cards. Approve (with an editable text), reject, retry delivery, retry drafting. With htmx an action returns the updated card; without JavaScript it redirects with 303 to `/operator`. An empty reply text is refused (`422`).
 
-## Реалізація
+## Implementation
 
-| Пункт | Де |
+| Item | Where |
 |---|---|
-| Прийом вебхука | `app/services/ingest.py` |
-| Забирання робіт, генерація, повтори | `app/services/drafting.py`, `app/workers/runner.py` |
-| LLM-клієнт, режим без ключа | `app/services/llm.py` |
-| Ліміт 60/хв у базі (`llm_calls`, advisory lock) | `app/services/rate_limit.py` |
-| Підтвердити, відхилити, повторити доставку | `app/api/operator.py`, `app/services/delivery.py` |
-| Відправник з `Idempotency-Key = lumenboard-draft-<draft_id>` | `app/services/delivery.py` |
-| Нестабільний мок (`MOCK_FAILURE_RATE`, `MOCK_SLOW_RATE`) | `app/api/mock_helpdesk.py` |
-| Пауза після `429`, повтор без витрати спроби | `app/services/rate_limit.py` (`llm_pause`), `app/services/drafting.py` |
-| Help Center і пошук (`keywords_uk`) | `app/api/kb.py`, `app/kb/` |
-| Інтерфейс (Jinja2, htmx, локальні Tailwind/htmx/Inter) | `app/templates/`, `app/static/vendor/` |
-| Тести паралельних дублікатів і однієї доставки | `tests/test_integration.py` |
-| Браузерна перевірка кожної кнопки | `e2e/ui_check.py` |
+| Webhook intake | `app/services/ingest.py` |
+| Claiming jobs, drafting, retries | `app/services/drafting.py`, `app/workers/runner.py` |
+| LLM client, keyless mode | `app/services/llm.py` |
+| 60/min limit in the database (`llm_calls`, advisory lock) | `app/services/rate_limit.py` |
+| Pause after `429`, retry without spending an attempt | `app/services/rate_limit.py` (`llm_pause`), `app/services/drafting.py` |
+| Approve, reject, retry delivery | `app/api/operator.py`, `app/services/delivery.py` |
+| Sender with `Idempotency-Key = lumenboard-draft-<draft_id>` | `app/services/delivery.py` |
+| Flaky mock (`MOCK_FAILURE_RATE`, `MOCK_SLOW_RATE`) | `app/api/mock_helpdesk.py` |
+| Help Center and search (`keywords_uk`) | `app/api/kb.py`, `app/kb/` |
+| UI (Jinja2, htmx, vendored Tailwind/htmx/Inter) | `app/templates/`, `app/static/vendor/` |
+| Tests for concurrent duplicates and single delivery | `tests/test_integration.py` |
+| Browser check of every button | `e2e/ui_check.py` |
 
-Поза цим контрактом нічого не надсилати клієнту.
+Send nothing to the customer outside this contract.
