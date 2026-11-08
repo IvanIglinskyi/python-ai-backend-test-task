@@ -182,3 +182,18 @@ def test_linkify_escapes_text_and_links_urls() -> None:
     html = str(linkify("Learn more: https://app.test/kb/roles. <b>"))
     assert '<a href="https://app.test/kb/roles"' in html
     assert "&lt;b&gt;" in html
+
+
+def test_ui_assets_are_vendored_not_loaded_from_cdns() -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    client = TestClient(create_app())
+    page = client.get("/kb").text
+    for host in ("cdn.tailwindcss.com", "unpkg.com", "fonts.googleapis.com", "jsdelivr"):
+        assert host not in page
+    for asset in ("tailwindcss-3.4.16.js", "htmx-2.0.4.min.js", "inter-latin-wght-normal.woff2"):
+        assert f"/static/vendor/{asset}" in page
+        response = client.get(f"/static/vendor/{asset}")
+        assert response.status_code == 200 and len(response.content) > 10_000

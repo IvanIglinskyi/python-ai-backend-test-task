@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.internal import router as internal_router
 from app.api.kb import router as kb_router
@@ -41,6 +43,11 @@ def create_app() -> FastAPI:
     app.include_router(mock_router)
     app.include_router(internal_router)
     app.include_router(kb_router)
+    app.mount(
+        "/static",
+        StaticFiles(directory=Path(__file__).resolve().parent / "static"),
+        name="static",
+    )
 
     @app.get("/health", response_class=PlainTextResponse)
     def health() -> str:
