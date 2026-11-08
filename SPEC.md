@@ -43,31 +43,29 @@
 
 ## Статуси
 
-`tickets.status`: `queued`, далі `drafting`, `pending_review`, `approved`, `rejected`, `sending`, `sent`, `send_failed`.
+`tickets.status`: `queued`, далі `drafting`, `pending_review`, `approved`, `rejected`, `sending`, `sent`, `send_failed`. `draft_failed` — LLM не відповів після `JOB_MAX_ATTEMPTS` спроб.
 
 `drafts.status`: `pending_review`, `approved`, `rejected`.
 
 `deliveries.state`: `pending`, `in_flight`, `sent`, `failed`.
 
-Роботу генерації воркер має забирати так: `SELECT ... FOR UPDATE SKIP LOCKED` для `jobs.status = queued` і `available_at <= now()`.
+`jobs.status`: `queued`, `running`, `done`, `failed`.
 
-## Що вже є
+## Черга
 
-- `GET /health`
-- Ідемпотентний прийом вебхука і рядок роботи `generate_draft`
-- `GET /operator` показує звернення і чернетки, без кнопок
-- Мок: `POST /mock/helpdesk/tickets` і прийом відповіді з ключем ідемпотентності
-- Статті і пошук
-- Воркер лише рахує чергу і чекає
+Воркер забирає роботу так: `UPDATE jobs ... WHERE id = (SELECT id ... FOR UPDATE SKIP LOCKED LIMIT 1)` для `status IN (queued, running)` і `available_at <= now()`. Для `running` поле `available_at` — це кінець лізингу: роботу впалого воркера забирає інший. `attempts` — fencing token, результат записує лише останній власник. Доставки забираються так само з таблиці `deliveries`.
 
-## Що зробити далі
+## Реалізація
 
-1. Воркер забирає роботу через `SKIP LOCKED`, шукає статті і кличе `app/services/llm.py`.
-2. LLM-клієнт: живий виклик за наявності ключа; без ключа — реальний HTTP до провайдера, потім статична чернетка з посиланнями на статті і пауза 5–30 секунд.
-3. Ліміт 60 запитів на хвилину в базі, щоб його бачили всі репліки воркера.
-4. Кнопки оператора: підтвердити і відхилити. Підтвердження створює один `deliveries`.
-5. Відправник: `POST reply_url`, повтор лише для тієї самої доставки, зупинка після `201` або `sent`.
-6. Мок інколи відповідає `5xx` або мовчить довше за таймаут.
-7. Тести на паралельні дублікати вебхука і на одну доставку клієнту.
+| Пункт | Де |
+|---|---|
+| Прийом вебхука | `app/services/ingest.py` |
+| Забирання робіт, генерація, повтори | `app/services/drafting.py`, `app/workers/runner.py` |
+| LLM-клієнт, режим без ключа | `app/services/llm.py` |
+| Ліміт 60/хв у базі (`llm_calls`, advisory lock) | `app/services/rate_limit.py` |
+| Підтвердити, відхилити, повторити доставку | `app/api/operator.py`, `app/services/delivery.py` |
+| Відправник з `Idempotency-Key = lumenboard-draft-<draft_id>` | `app/services/delivery.py` |
+| Нестабільний мок (`MOCK_FAILURE_RATE`, `MOCK_SLOW_RATE`) | `app/api/mock_helpdesk.py` |
+| Тести паралельних дублікатів і однієї доставки | `tests/test_integration.py` |
 
 Поза цим контрактом нічого не надсилати клієнту.
