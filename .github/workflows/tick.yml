@@ -1,0 +1,23 @@
+# Safety net for the Vercel deployment: Vercel Hobby cron runs once a day, so
+# this schedule drains the queue (retries with backoff, lost kicks) every 5 min.
+# Repository secrets: TICK_URL (https://<app>.vercel.app/internal/tick), CRON_SECRET.
+name: queue tick
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    if: ${{ vars.TICK_ENABLED != 'false' }}
+    steps:
+      - name: Trigger /internal/tick
+        env:
+          TICK_URL: ${{ secrets.TICK_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$TICK_URL" ]; then echo "TICK_URL is not set, skipping"; exit 0; fi
+          # The tick runs up to TICK_SECONDS; we only need it started.
+          curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" --max-time 20 "$TICK_URL" || true

@@ -1,0 +1,8 @@
+.venv
+.git
+helpdesk-builder
+tests
+docker
+**/__pycache__
+.pytest_cache
+.env

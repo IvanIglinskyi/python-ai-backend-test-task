@@ -1,10 +1,11 @@
 from html import escape
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import schedule_kick
 from app.db.models import Delivery, Draft, Ticket, WebhookEvent
 from app.db.session import session_scope
 from app.kb.search import load_articles
@@ -120,13 +121,15 @@ async def operator_home(session: AsyncSession = Depends(session_scope)) -> str:
     )
 
 
-def _back() -> RedirectResponse:
-    return RedirectResponse("/operator", status_code=303)
+def _back(background: BackgroundTasks | None = None) -> RedirectResponse:
+    return RedirectResponse("/operator", status_code=303, background=background)
 
 
 @router.post("/operator/drafts/{draft_id}/approve")
 async def approve(
     draft_id: int,
+    request: Request,
+    background: BackgroundTasks,
     message: str = Form(default=""),
     session: AsyncSession = Depends(session_scope),
 ) -> RedirectResponse:
@@ -134,7 +137,8 @@ async def approve(
         await approve_draft(session, draft_id, message)
     except DecisionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return _back()
+    schedule_kick(request, background)
+    return _back(background)
 
 
 @router.post("/operator/drafts/{draft_id}/reject")
@@ -147,9 +151,15 @@ async def reject(draft_id: int, session: AsyncSession = Depends(session_scope)) 
 
 
 @router.post("/operator/deliveries/{delivery_id}/retry")
-async def retry(delivery_id: int, session: AsyncSession = Depends(session_scope)) -> RedirectResponse:
+async def retry(
+    delivery_id: int,
+    request: Request,
+    background: BackgroundTasks,
+    session: AsyncSession = Depends(session_scope),
+) -> RedirectResponse:
     try:
         await retry_failed(session, delivery_id)
     except DecisionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return _back()
+    schedule_kick(request, background)
+    return _back(background)

@@ -95,6 +95,15 @@ class Delivery(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class WorkerKick(Base):
+    """Single row: when a serverless tick was last triggered (debounces kicks)."""
+
+    __tablename__ = "worker_kicks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kicked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LlmCall(Base):
     """One row per provider call; the sliding window behind the 60/min limit."""
 

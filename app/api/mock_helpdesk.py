@@ -11,12 +11,13 @@ import random
 import uuid
 from html import escape
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import public_base_url, schedule_kick
 from app.config import get_settings
 from app.db.models import MockReply
 from app.db.session import session_scope
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/mock/helpdesk")
 
 def _webhook_payload(request: Request, body: MockTicketIn) -> dict:
     # The worker posts to reply_url, so it must be reachable from the worker, not the browser.
-    base = get_settings().mock_reply_base_url or str(request.base_url)
+    base = get_settings().mock_reply_base_url or public_base_url(request)
     reply_url = f"{base.rstrip('/')}/mock/helpdesk/tickets/{body.ticket_id}/replies"
     return {
         "event_id": body.event_id or f"evt_{uuid.uuid4().hex[:12]}",
@@ -43,10 +44,13 @@ def _webhook_payload(request: Request, body: MockTicketIn) -> dict:
 async def open_ticket(
     body: MockTicketIn,
     request: Request,
+    background: BackgroundTasks,
     session: AsyncSession = Depends(session_scope),
 ) -> dict:
     payload = _webhook_payload(request, body)
     result = await accept_event(session, payload)
+    if result["status"] == "accepted":
+        schedule_kick(request, background)
     return {**result, "webhook": payload}
 
 
@@ -82,6 +86,7 @@ async def mock_home(session: AsyncSession = Depends(session_scope)) -> str:
 @router.post("/tickets/form")
 async def open_ticket_form(
     request: Request,
+    background: BackgroundTasks,
     ticket_id: str = Form(),
     customer_email: str = Form(),
     message: str = Form(),
@@ -89,7 +94,8 @@ async def open_ticket_form(
 ) -> RedirectResponse:
     body = MockTicketIn(ticket_id=ticket_id, customer_email=customer_email, message=message)
     await accept_event(session, _webhook_payload(request, body))
-    return RedirectResponse("/operator", status_code=303)
+    schedule_kick(request, background)
+    return RedirectResponse("/operator", status_code=303, background=background)
 
 
 @router.post("/tickets/{ticket_id}/replies", status_code=201)

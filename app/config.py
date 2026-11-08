@@ -1,6 +1,7 @@
+import os
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +29,15 @@ class Settings(BaseSettings):
             if value.startswith(prefix):
                 return "postgresql+asyncpg://" + value[len(prefix):]
         return value
+
+    # Serverless (Vercel): no connection pool, the queue is drained by /internal/tick.
+    serverless: bool = Field(default_factory=lambda: bool(os.environ.get("VERCEL")))
+    # Protects /internal/tick. Vercel Cron sends it as "Authorization: Bearer <secret>".
+    cron_secret: str = ""
+    # How long one tick keeps draining the queue (must fit the function maxDuration).
+    tick_seconds: float = 240.0
+    # At most one self-triggered tick per this many seconds.
+    kick_interval_seconds: int = 10
 
     # Worker.
     # Run the worker loops inside the API process (for single-container hosting).
