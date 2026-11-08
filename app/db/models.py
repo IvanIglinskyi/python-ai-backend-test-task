@@ -104,6 +104,15 @@ class WorkerKick(Base):
     kicked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LlmPause(Base):
+    """Single row: no provider calls until `until` (set when the provider answers 429)."""
+
+    __tablename__ = "llm_pause"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LlmCall(Base):
     """One row per provider call; the sliding window behind the 60/min limit."""
 

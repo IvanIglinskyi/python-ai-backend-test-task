@@ -4,6 +4,9 @@ Every provider call inserts a row into `llm_calls`. A slot is granted while
 fewer than `limit` rows exist in the last 60 seconds. A transaction-scoped
 advisory lock serialises the check-and-insert, so all worker replicas share
 one budget.
+
+When the provider itself answers 429, `pause()` stores a shared "no calls
+until" moment in `llm_pause`; every replica respects it.
 """
 
 import asyncio
@@ -14,11 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 _LOCK_KEY = 7_311_042  # arbitrary constant for pg_advisory_xact_lock
 WINDOW_SECONDS = 60
+MAX_PAUSE_SECONDS = 3600
+
+_PAUSED_FOR = text(
+    "SELECT EXTRACT(EPOCH FROM until - now()) FROM llm_pause WHERE id = 1 AND until > now()"
+)
 
 
 async def try_acquire(session: AsyncSession, limit: int) -> float:
     """Take a slot. Returns 0 on success, otherwise seconds to wait before retrying."""
     await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LOCK_KEY})
+    paused = await session.scalar(_PAUSED_FOR)
+    if paused:
+        await session.rollback()
+        return max(float(paused), 0.05)
     row = (
         await session.execute(
             text(
@@ -52,3 +64,24 @@ async def acquire(
         if wait == 0:
             return
         await sleep(min(wait, 5.0))
+
+
+async def paused_for(factory: async_sessionmaker[AsyncSession]) -> float:
+    """Seconds left in a provider-imposed pause, 0 if none."""
+    async with factory() as session:
+        value = await session.scalar(_PAUSED_FOR)
+    return max(float(value), 0.0) if value else 0.0
+
+
+async def pause(factory: async_sessionmaker[AsyncSession], seconds: float) -> None:
+    """Stop all provider calls for `seconds` (extends, never shortens, a running pause)."""
+    seconds = min(max(seconds, 1.0), MAX_PAUSE_SECONDS)
+    async with factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO llm_pause (id, until) VALUES (1, now() + make_interval(secs => :s)) "
+                "ON CONFLICT (id) DO UPDATE SET until = GREATEST(llm_pause.until, EXCLUDED.until)"
+            ),
+            {"s": float(seconds)},
+        )
+        await session.commit()

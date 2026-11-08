@@ -10,6 +10,7 @@ modes apart except by `source`.
 import asyncio
 import logging
 import random
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -21,17 +22,53 @@ log = logging.getLogger("llm")
 
 SYSTEM_PROMPT = (
     "You are a support agent for Lumenboard, a dashboards and reporting product. "
-    "Write a short, friendly draft reply to the customer in English. "
-    "Use only the knowledge-base articles provided; do not invent features, prices or steps. "
-    "Give concrete steps when the articles contain them. "
-    "End with links to the articles you used, one per line, as 'Learn more: <url>'. "
-    "If the articles do not answer the question, say that you are passing the ticket "
+    "Write a short, friendly draft reply to the customer in English.\n"
+    "Rules:\n"
+    "- Use only the knowledge-base articles provided; do not invent features, prices or steps.\n"
+    "- Give concrete steps when the articles contain them.\n"
+    "- Plain text only: no Markdown, no asterisks, no headings. Numbered steps like '1.' are fine.\n"
+    "- Never use placeholders such as [Your Name].\n"
+    "- Before the sign-off, list the links of the articles you used, one per line, "
+    "as 'Learn more: <url>'.\n"
+    "- Sign off exactly as:\nBest regards,\nLumenboard Support\n"
+    "- If the articles do not answer the question, say that you are passing the ticket "
     "to a specialist and will follow up."
 )
 
 
 class LLMError(Exception):
-    """Provider call failed; the job should be retried later."""
+    """Provider call failed; the job should be retried later.
+
+    `throttled` marks a 429: the provider asks us to slow down. That is not a
+    failure of the ticket, so the worker waits without spending an attempt.
+    """
+
+    def __init__(self, message: str, *, throttled: bool = False,
+                 retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.throttled = throttled
+        self.retry_after = retry_after
+
+
+_DURATION = re.compile(r"(\d+(?:\.\d+)?)(ms|h|m|s)")
+
+
+def retry_after_seconds(headers: httpx.Headers) -> float | None:
+    """Seconds to wait from Retry-After or x-ratelimit-reset-* ("7.74s", "1m2.5s", "350ms")."""
+    value = headers.get("retry-after")
+    if value:
+        try:
+            return max(float(value), 0.0)
+        except ValueError:
+            pass
+    scale = {"ms": 0.001, "s": 1, "m": 60, "h": 3600}
+    for name in ("x-ratelimit-reset-tokens", "x-ratelimit-reset-requests"):
+        value = headers.get(name)
+        if value:
+            total = sum(float(n) * scale[u] for n, u in _DURATION.findall(value))
+            if total:
+                return total
+    return None
 
 
 @dataclass(frozen=True)
@@ -39,6 +76,20 @@ class DraftResult:
     body: str
     article_ids: list[str]
     source: str  # "llm" or "static"
+
+
+_THINK = re.compile(r"<think>.*?</think>", re.S)
+_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.M)
+_BULLET = re.compile(r"^(\s*)[*+]\s+", re.M)
+
+
+def plain_text(text: str) -> str:
+    """The helpdesk shows plain text: drop reasoning blocks and Markdown markup."""
+    text = _THINK.sub("", text)
+    text = text.replace("**", "").replace("__", "")
+    text = _HEADING.sub("", text)
+    text = _BULLET.sub(r"\1- ", text)
+    return text.strip()
 
 
 def build_messages(message: str, articles: list[dict]) -> list[dict]:
@@ -115,10 +166,13 @@ async def generate_draft(
         )
     except httpx.HTTPError as exc:
         raise LLMError(f"provider request failed: {exc.__class__.__name__}") from exc
+    if response.status_code == 429:
+        raise LLMError(f"provider rate limit (429): {response.text[:200]}", throttled=True,
+                       retry_after=retry_after_seconds(response.headers))
     if response.status_code != 200:
         raise LLMError(f"provider answered {response.status_code}: {response.text[:200]}")
     try:
-        body = response.json()["choices"][0]["message"]["content"].strip()
+        body = plain_text(response.json()["choices"][0]["message"]["content"])
     except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
         raise LLMError("unexpected provider response shape") from exc
     if not body:

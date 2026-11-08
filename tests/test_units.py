@@ -197,3 +197,33 @@ def test_ui_assets_are_vendored_not_loaded_from_cdns() -> None:
         assert f"/static/vendor/{asset}" in page
         response = client.get(f"/static/vendor/{asset}")
         assert response.status_code == 200 and len(response.content) > 10_000
+
+
+def test_live_answer_is_cleaned_to_plain_text() -> None:
+    from app.services.llm import plain_text
+
+    raw = "<think>user wants pdf</think>\n## Steps\n* Click **Export**\n* Choose __PDF__\nLearn more: https://x/kb/a"
+    assert plain_text(raw) == "Steps\n- Click Export\n- Choose PDF\nLearn more: https://x/kb/a"
+
+
+def test_retry_after_is_read_from_provider_headers() -> None:
+    from app.services.llm import retry_after_seconds
+
+    assert retry_after_seconds(httpx.Headers({"retry-after": "7"})) == 7
+    assert retry_after_seconds(httpx.Headers({"x-ratelimit-reset-tokens": "7.74s"})) == 7.74
+    assert retry_after_seconds(httpx.Headers({"x-ratelimit-reset-tokens": "1m2.5s"})) == 62.5
+    assert retry_after_seconds(httpx.Headers({"x-ratelimit-reset-requests": "350ms"})) == pytest.approx(0.35)
+    assert retry_after_seconds(httpx.Headers({})) is None
+
+
+def test_provider_429_is_a_throttle_not_a_failure() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"retry-after": "3"}, text="slow down")
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await generate_draft("hello", [], client=client, settings=_settings(llm_api_key="k"))
+
+    with pytest.raises(LLMError) as info:
+        asyncio.run(scenario())
+    assert info.value.throttled is True and info.value.retry_after == 3
