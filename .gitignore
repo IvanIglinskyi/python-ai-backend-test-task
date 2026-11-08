@@ -9,3 +9,5 @@ __pycache__/
 htmlcov/
 helpdesk-builder/node_modules/
 helpdesk-builder/dist/
+.vercel
+.env.local
