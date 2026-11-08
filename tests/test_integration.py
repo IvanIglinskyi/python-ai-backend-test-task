@@ -449,3 +449,22 @@ def test_operator_ui_renders_and_htmx_actions_return_the_card(db) -> None:
     assert again_plain.status_code == 409
     assert mock.status_code == 200 and "Helpdesk mock" in mock.text
     assert deliveries == 1
+
+
+def test_ui_rejects_bad_input_without_server_errors(db) -> None:
+    async def scenario():
+        draft_id = await _draft_ready()
+        async with _app_client() as client:
+            bad_email = await client.post("/mock/helpdesk/tickets/form", data={
+                "ticket_id": "T-9", "customer_email": "not-an-email", "message": "hi"})
+            empty_reply = await client.post(f"/operator/drafts/{draft_id}/approve",
+                                            data={"message": "   "})
+            form_ok = await client.post("/mock/helpdesk/tickets/form", data={
+                "ticket_id": "T-9", "customer_email": "a@example.com", "message": "hi"})
+        return bad_email.status_code, empty_reply.status_code, form_ok.status_code, \
+            await _count(Delivery), await _count(Job)
+
+    bad_email, empty_reply, form_ok, deliveries, jobs = db(scenario)
+    assert bad_email == 422
+    assert empty_reply == 422 and deliveries == 0
+    assert form_ok == 303 and jobs == 2

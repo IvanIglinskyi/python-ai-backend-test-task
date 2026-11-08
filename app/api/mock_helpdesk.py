@@ -13,6 +13,7 @@ from datetime import UTC
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,7 +94,12 @@ async def open_ticket_form(
     message: str = Form(),
     session: AsyncSession = Depends(session_scope),
 ) -> RedirectResponse:
-    body = MockTicketIn(ticket_id=ticket_id, customer_email=customer_email, message=message)
+    try:
+        body = MockTicketIn(ticket_id=ticket_id.strip(), customer_email=customer_email.strip(),
+                            message=message.strip())
+    except ValidationError as exc:
+        fields = ", ".join(str(e["loc"][-1]) for e in exc.errors())
+        raise HTTPException(status_code=422, detail=f"invalid fields: {fields}") from exc
     await accept_event(session, _webhook_payload(request, body))
     schedule_kick(request, background)
     return RedirectResponse("/operator", status_code=303, background=background)

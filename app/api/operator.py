@@ -262,9 +262,12 @@ async def approve(
     draft_id: int,
     request: Request,
     background: BackgroundTasks,
-    message: str = Form(default=""),
+    message: str | None = Form(default=None),
     session: AsyncSession = Depends(session_scope),
 ) -> Response:
+    # Omitted -> send the draft as is; submitted empty -> refuse rather than guess.
+    if message is not None and not message.strip():
+        raise HTTPException(status_code=422, detail="reply text is empty")
     ticket_id = await session.scalar(select(Draft.ticket_id).where(Draft.id == draft_id))
     try:
         await approve_draft(session, draft_id, message)
