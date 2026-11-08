@@ -1,0 +1,50 @@
+[
+  {
+    "id": "export-pdf",
+    "title": "Експорт звіту в PDF",
+    "url": "https://help.lumenboard.test/articles/export-pdf",
+    "body": "Відкрийте звіт, натисніть Експорт і оберіть PDF. Файл з’явиться в розділі Завантаження протягом хвилини. PDF доступний на планах Team і Enterprise. На плані Free експорт лише CSV."
+  },
+  {
+    "id": "export-csv",
+    "title": "Експорт звіту в CSV",
+    "url": "https://help.lumenboard.test/articles/export-csv",
+    "body": "У звіті натисніть Експорт, потім CSV. Кодування файлу UTF-8. Дата в колонках використовує часовий пояс робочого простору."
+  },
+  {
+    "id": "invite-members",
+    "title": "Запрошення учасників",
+    "url": "https://help.lumenboard.test/articles/invite-members",
+    "body": "Власник простору відкриває Налаштування, Учасники, Запросити. Вкажіть email і роль: переглядач, редактор або адміністратор. Запрошення дійсне 7 днів."
+  },
+  {
+    "id": "roles",
+    "title": "Ролі та доступ до звітів",
+    "url": "https://help.lumenboard.test/articles/roles",
+    "body": "Переглядач бачить дашборди без редагування. Редактор змінює звіти. Адміністратор керує учасниками і ключами API. Експорт PDF дозволений редактору і адміністратору."
+  },
+  {
+    "id": "billing",
+    "title": "Тарифи і оплата",
+    "url": "https://help.lumenboard.test/articles/billing",
+    "body": "План Free має 3 дашборди і експорт CSV. Team додає PDF, 20 учасників і спільні фільтри. Enterprise додає SSO і окремий регіон даних. Рахунок надсилається власнику простору."
+  },
+  {
+    "id": "api-keys",
+    "title": "Ключі API",
+    "url": "https://help.lumenboard.test/articles/api-keys",
+    "body": "Адміністратор створює ключ у Налаштування, API. Ключ показується один раз. Запити йдуть на https://api.lumenboard.test з заголовком Authorization: Bearer. Ліміт Team — 60 запитів на хвилину."
+  },
+  {
+    "id": "sso",
+    "title": "Вхід через SSO",
+    "url": "https://help.lumenboard.test/articles/sso",
+    "body": "SSO доступний на плані Enterprise. Адміністратор вмикає SAML у Налаштування, Безпека і завантажує metadata IdP. Після увімкнення парольний вхід для домену компанії вимикається."
+  },
+  {
+    "id": "refresh",
+    "title": "Оновлення даних",
+    "url": "https://help.lumenboard.test/articles/refresh",
+    "body": "Джерела оновлюються щогодини. Кнопка Оновити на дашборді ставить позачергове оновлення, не частіше ніж раз на 10 хвилин. Поки оновлення триває, на картці видно час останнього успішного зрізу."
+  }
+]
