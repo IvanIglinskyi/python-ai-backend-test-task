@@ -30,6 +30,12 @@ class Settings(BaseSettings):
                 return "postgresql+asyncpg://" + value[len(prefix):]
         return value
 
+    # Public URL of this service; knowledge-base links in drafts point here.
+    public_base_url: str = Field(default_factory=lambda: (
+        f"https://{os.environ['VERCEL_PROJECT_PRODUCTION_URL']}"
+        if os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") else "http://localhost:8000"
+    ))
+
     # Serverless (Vercel): no connection pool, the queue is drained by /internal/tick.
     serverless: bool = Field(default_factory=lambda: bool(os.environ.get("VERCEL")))
     # Protects /internal/tick. Vercel Cron sends it as "Authorization: Bearer <secret>".

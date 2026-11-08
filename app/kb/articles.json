@@ -1,50 +1,42 @@
 [
   {
     "id": "export-pdf",
-    "title": "Експорт звіту в PDF",
-    "url": "https://help.lumenboard.test/articles/export-pdf",
-    "body": "Відкрийте звіт, натисніть Експорт і оберіть PDF. Файл з’явиться в розділі Завантаження протягом хвилини. PDF доступний на планах Team і Enterprise. На плані Free експорт лише CSV."
+    "title": "Exporting a report to PDF",
+    "body": "Open the report, click Export and choose PDF. The file appears under Downloads within a minute. PDF export is available on the Team and Enterprise plans. The Free plan can only export CSV."
   },
   {
     "id": "export-csv",
-    "title": "Експорт звіту в CSV",
-    "url": "https://help.lumenboard.test/articles/export-csv",
-    "body": "У звіті натисніть Експорт, потім CSV. Кодування файлу UTF-8. Дата в колонках використовує часовий пояс робочого простору."
+    "title": "Exporting a report to CSV",
+    "body": "In the report, click Export, then CSV. Files are encoded in UTF-8. Dates in the columns use the workspace time zone, which you can change in Settings, Workspace."
   },
   {
     "id": "invite-members",
-    "title": "Запрошення учасників",
-    "url": "https://help.lumenboard.test/articles/invite-members",
-    "body": "Власник простору відкриває Налаштування, Учасники, Запросити. Вкажіть email і роль: переглядач, редактор або адміністратор. Запрошення дійсне 7 днів."
+    "title": "Inviting team members",
+    "body": "The workspace owner opens Settings, Members, Invite. Enter an email address and pick a role: viewer, editor or admin. Invitations are valid for 7 days and can be resent from the same page."
   },
   {
     "id": "roles",
-    "title": "Ролі та доступ до звітів",
-    "url": "https://help.lumenboard.test/articles/roles",
-    "body": "Переглядач бачить дашборди без редагування. Редактор змінює звіти. Адміністратор керує учасниками і ключами API. Експорт PDF дозволений редактору і адміністратору."
+    "title": "Roles and report access",
+    "body": "Viewers see dashboards but cannot edit them. Editors change reports and dashboards. Admins manage members and API keys. PDF export is allowed for editors and admins."
   },
   {
     "id": "billing",
-    "title": "Тарифи і оплата",
-    "url": "https://help.lumenboard.test/articles/billing",
-    "body": "План Free має 3 дашборди і експорт CSV. Team додає PDF, 20 учасників і спільні фільтри. Enterprise додає SSO і окремий регіон даних. Рахунок надсилається власнику простору."
+    "title": "Plans and billing",
+    "body": "The Free plan includes 3 dashboards and CSV export. Team adds PDF export, up to 20 members and shared filters. Enterprise adds SSO and a dedicated data region. To change your plan, open Settings, Billing. Invoices are sent to the workspace owner."
   },
   {
     "id": "api-keys",
-    "title": "Ключі API",
-    "url": "https://help.lumenboard.test/articles/api-keys",
-    "body": "Адміністратор створює ключ у Налаштування, API. Ключ показується один раз. Запити йдуть на https://api.lumenboard.test з заголовком Authorization: Bearer. Ліміт Team — 60 запитів на хвилину."
+    "title": "API keys",
+    "body": "An admin creates a key in Settings, API. The key is shown only once, so store it safely. Send requests with the header Authorization: Bearer <key>. The Team plan allows 60 API requests per minute."
   },
   {
     "id": "sso",
-    "title": "Вхід через SSO",
-    "url": "https://help.lumenboard.test/articles/sso",
-    "body": "SSO доступний на плані Enterprise. Адміністратор вмикає SAML у Налаштування, Безпека і завантажує metadata IdP. Після увімкнення парольний вхід для домену компанії вимикається."
+    "title": "Single sign-on (SSO)",
+    "body": "SSO is available on the Enterprise plan. An admin enables SAML in Settings, Security and uploads the identity provider metadata. Once enabled, password login is turned off for the company domain."
   },
   {
     "id": "refresh",
-    "title": "Оновлення даних",
-    "url": "https://help.lumenboard.test/articles/refresh",
-    "body": "Джерела оновлюються щогодини. Кнопка Оновити на дашборді ставить позачергове оновлення, не частіше ніж раз на 10 хвилин. Поки оновлення триває, на картці видно час останнього успішного зрізу."
+    "title": "Data refresh and automatic updates",
+    "body": "Data sources refresh automatically every hour. The Refresh button on a dashboard queues an extra refresh, at most once every 10 minutes. While a refresh runs, each card shows the time of the last successful update."
   }
 ]

@@ -29,7 +29,7 @@
         <span class="font-semibold tracking-tight">Lumenboard <span class="font-normal text-slate-500 dark:text-slate-400">Support</span></span>
       </a>
       <nav class="flex items-center gap-1 text-sm">
-        {% set nav = [("/operator", "Inbox", "operator"), ("/mock/helpdesk", "Helpdesk mock", "mock"), ("/docs", "API", "docs")] %}
+        {% set nav = [("/operator", "Inbox", "operator"), ("/mock/helpdesk", "Helpdesk mock", "mock"), ("/kb", "Help Center", "kb"), ("/docs", "API", "docs")] %}
         {% for href, label, key in nav %}
         <a href="{{ href }}"
            class="rounded-md px-3 py-1.5 font-medium transition {% if active == key %}bg-slate-900 text-white dark:bg-white dark:text-slate-900{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800{% endif %}">{{ label }}</a>

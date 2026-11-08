@@ -31,10 +31,10 @@ def test_keyless_mode_calls_provider_and_returns_static_draft() -> None:
         delays.append(seconds)
 
     async def scenario():
-        articles = search_articles("Не можу експортувати звіт у PDF")
+        articles = search_articles("I can't export my report to PDF")
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             return articles, await generate_draft(
-                "Не можу експортувати звіт у PDF",
+                "I can't export my report to PDF",
                 articles,
                 client=client,
                 settings=_settings(llm_api_key=""),
@@ -66,7 +66,7 @@ def test_keyless_mode_survives_network_error() -> None:
 def test_live_mode_uses_provider_answer() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer sk-test"
-        return httpx.Response(200, json={"choices": [{"message": {"content": " Відповідь "}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": " Your answer "}}]})
 
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -75,7 +75,7 @@ def test_live_mode_uses_provider_answer() -> None:
 
     result = asyncio.run(scenario())
     assert result.source == "llm"
-    assert result.body == "Відповідь"
+    assert result.body == "Your answer"
 
 
 def test_live_mode_raises_on_provider_error() -> None:
@@ -142,3 +142,43 @@ def test_public_base_url_honours_proxy_headers() -> None:
              "headers": [(b"host", b"internal"), (b"x-forwarded-host", b"app.vercel.app"),
                          (b"x-forwarded-proto", b"https")]}
     assert public_base_url(Request(scope)) == "https://app.vercel.app"
+
+
+def test_search_ranks_english_questions() -> None:
+    cases = {
+        "I can't export my report to PDF": "export-pdf",
+        "I want to switch to a different plan": "billing",
+        "How do I invite a new member to my workspace?": "invite-members",
+        "My CSV export shows the wrong time zone": "export-csv",
+        "How do I set up automatic dashboard refresh?": "refresh",
+        "Where do I get an API key?": "api-keys",
+    }
+    for question, expected in cases.items():
+        assert search_articles(question)[0]["id"] == expected, question
+
+
+def test_article_links_point_to_the_service_help_center() -> None:
+    article = search_articles("export pdf")[0]
+    assert article["url"].endswith("/kb/export-pdf")
+    assert ".test/" not in article["url"]
+
+
+def test_help_center_pages_render() -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    client = TestClient(create_app())
+    index = client.get("/kb")
+    article = client.get("/kb/export-pdf")
+    assert index.status_code == 200 and "Lumenboard Help Center" in index.text
+    assert article.status_code == 200 and "Exporting a report to PDF" in article.text
+    assert client.get("/kb/missing").status_code == 404
+
+
+def test_linkify_escapes_text_and_links_urls() -> None:
+    from app.api.operator import linkify
+
+    html = str(linkify("Learn more: https://app.test/kb/roles. <b>"))
+    assert '<a href="https://app.test/kb/roles"' in html
+    assert "&lt;b&gt;" in html

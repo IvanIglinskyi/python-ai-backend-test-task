@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,23 @@ from app.services.delivery import DecisionError, approve_draft, reject_draft, re
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
+
+# No trailing punctuation: "see https://x/kb/a." links to https://x/kb/a.
+_URL = re.compile(r"https?://[^\s<>\"'&]*[^\s<>\"'&.,;:!?)]")
+
+
+def linkify(text: str) -> Markup:
+    """Escape text and turn bare URLs into links."""
+    escaped = str(escape(text or ""))
+    return Markup(_URL.sub(
+        lambda m: f'<a href="{m.group(0)}" target="_blank" rel="noopener" '
+                  f'class="font-medium text-indigo-600 underline decoration-indigo-300 '
+                  f'underline-offset-2 hover:text-indigo-500 dark:text-indigo-400">{m.group(0)}</a>',
+        escaped,
+    ))
+
+
+templates.env.filters["linkify"] = linkify
 
 # status -> (label, badge classes, dot class)
 TICKET_STATUS = {

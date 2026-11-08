@@ -16,7 +16,7 @@ PAYLOAD = {
     "event_id": "evt_8f2a",
     "ticket_id": "T-1042",
     "customer_email": "user@example.com",
-    "message": "Не можу експортувати звіт у PDF",
+    "message": "I can't export my report to PDF",
     "reply_url": "http://helpdesk.test/tickets/T-1042/replies",
 }
 
@@ -127,7 +127,7 @@ def test_worker_makes_provider_request_and_stores_static_draft(db) -> None:
     assert draft.source == "static"
     assert draft.status == "pending_review"
     assert "export-pdf" in draft.article_ids
-    assert "https://help.lumenboard.test/articles/export-pdf" in draft.body
+    assert "/kb/export-pdf" in draft.body
     assert ticket.status == "pending_review"
     assert job.status == "done"
     assert llm_calls == 1
@@ -180,7 +180,7 @@ def test_concurrent_approvals_create_exactly_one_delivery(db) -> None:
         async def approve():
             async with factory() as session:
                 try:
-                    return await delivery.approve_draft(session, draft_id, "Готова відповідь")
+                    return await delivery.approve_draft(session, draft_id, "Final reply")
                 except delivery.DecisionError:
                     return None
 
@@ -192,7 +192,7 @@ def test_concurrent_approvals_create_exactly_one_delivery(db) -> None:
     results, deliveries, stored = db(scenario)
     assert sum(r is not None for r in results) == 1
     assert deliveries == 1
-    assert stored.message == "Готова відповідь"
+    assert stored.message == "Final reply"
     assert stored.reply_url == PAYLOAD["reply_url"]
 
 
@@ -264,7 +264,7 @@ def test_full_flow_through_mock_helpdesk_delivers_one_reply(db, monkeypatch) -> 
         async with _app_client() as app_client:
             response = await app_client.post("/mock/helpdesk/tickets", json={
                 "event_id": "evt_mock", "ticket_id": "T-7",
-                "customer_email": "user@example.com", "message": "Як запросити учасника?"})
+                "customer_email": "user@example.com", "message": "How do I invite a member?"})
             assert response.status_code == 200
             async with factory() as session:
                 job = await drafting.claim_job(session, lease_seconds=300)

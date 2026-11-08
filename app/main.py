@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from app.api.internal import router as internal_router
+from app.api.kb import router as kb_router
 from app.api.mock_helpdesk import router as mock_router
 from app.api.operator import router as operator_router
 from app.api.webhooks import router as webhook_router
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(operator_router)
     app.include_router(mock_router)
     app.include_router(internal_router)
+    app.include_router(kb_router)
 
     @app.get("/health", response_class=PlainTextResponse)
     def health() -> str:

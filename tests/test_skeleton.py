@@ -31,6 +31,6 @@ def test_webhook_schema_requires_message() -> None:
 
 
 def test_search_finds_pdf_article() -> None:
-    matches = search_articles("Не можу експортувати звіт у PDF")
+    matches = search_articles("I can't export my report to PDF")
     assert matches
     assert matches[0]["id"] == "export-pdf"
