@@ -63,6 +63,10 @@ docker compose up --build
 
 Docker Compose substitutes the variables from `.env` into the compose file.
 
+Tested end to end with Groq (`LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=qwen/qwen3.8-27b`). The prompt asks for plain text with a fixed sign-off and article links, and the client strips Markdown and `<think>` blocks as a safety net, because the helpdesk shows raw text.
+
+**Provider rate limits.** Our own limit is 60 calls a minute, but a provider can be stricter: Groq's free tier allows about 8,000 tokens a minute, roughly ten drafts. A `429` is treated as "wait", not as a failure: the job goes back to the queue after `Retry-After` (or `x-ratelimit-reset-*`) **without spending an attempt**, and a shared pause in `llm_pause` stops every worker replica from calling the provider until it ends. In a test with 80 tickets at once on the free tier, all 80 were drafted and none failed; throughput simply followed the provider's limit. If drafting does fail for another reason after `JOB_MAX_ATTEMPTS`, the card offers **Retry drafting**.
+
 ## Trying it out
 
 In the browser:
