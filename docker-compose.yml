@@ -1,3 +1,13 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://helpdesk:helpdesk@db:5432/helpdesk
+  INIT_DB: "1"
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+  MOCK_FAILURE_RATE: ${MOCK_FAILURE_RATE:-0.2}
+  MOCK_SLOW_RATE: ${MOCK_SLOW_RATE:-0.1}
+  MOCK_REPLY_BASE_URL: http://api:8000
+
 services:
   db:
     image: postgres:16
@@ -7,6 +17,9 @@ services:
       POSTGRES_DB: helpdesk
     ports:
       - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U helpdesk -d helpdesk"]
       interval: 5s
@@ -17,12 +30,8 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://helpdesk:helpdesk@db:5432/helpdesk
-      INIT_DB: "1"
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    environment: *app-env
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -30,12 +39,22 @@ services:
   worker:
     build: .
     command: ["python", "-m", "app.workers.runner"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://helpdesk:helpdesk@db:5432/helpdesk
-      INIT_DB: "1"
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    environment: *app-env
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+
+  # docker compose run --rm tests
+  tests:
+    build: .
+    profiles: ["test"]
+    command: ["python", "-m", "pytest", "-v"]
+    environment:
+      TEST_DATABASE_URL: postgresql+asyncpg://helpdesk:helpdesk@db:5432/helpdesk_test
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
