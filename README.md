@@ -20,7 +20,7 @@ Stack: Python 3.12, FastAPI, SQLAlchemy 2 (async) + asyncpg, PostgreSQL 16, http
 | Health | https://python-ai-backend-test-task.vercel.app/health |
 | Swagger | https://python-ai-backend-test-task.vercel.app/docs |
 
-The deployment runs in keyless mode with a flaky mock (20% of replies get `503`, 10% are slow), so a delivery sometimes shows 2–3 attempts, yet the customer receives a single reply.
+The deployment drafts with a real model (Groq, `qwen/qwen3.8-27b`) and uses a flaky mock (20% of replies get `503`, 10% are slow), so a delivery sometimes shows 2–3 attempts, yet the customer receives a single reply. Without `LLM_API_KEY` the same deployment falls back to keyless mode.
 
 ## Quick start
 
