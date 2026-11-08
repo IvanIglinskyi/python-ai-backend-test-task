@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     delivery_max_attempts: int = 8
 
     # Mock helpdesk misbehaviour, to exercise retries.
+    # Base URL the worker uses to reach the mock (defaults to the request URL).
+    mock_reply_base_url: str = ""
     mock_failure_rate: float = 0.2
     mock_slow_rate: float = 0.1
     mock_slow_seconds: float = 15.0

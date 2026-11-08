@@ -27,7 +27,9 @@ router = APIRouter(prefix="/mock/helpdesk")
 
 
 def _webhook_payload(request: Request, body: MockTicketIn) -> dict:
-    reply_url = f"{str(request.base_url).rstrip('/')}/mock/helpdesk/tickets/{body.ticket_id}/replies"
+    # The worker posts to reply_url, so it must be reachable from the worker, not the browser.
+    base = get_settings().mock_reply_base_url or str(request.base_url)
+    reply_url = f"{base.rstrip('/')}/mock/helpdesk/tickets/{body.ticket_id}/replies"
     return {
         "event_id": body.event_id or f"evt_{uuid.uuid4().hex[:12]}",
         "ticket_id": body.ticket_id,
