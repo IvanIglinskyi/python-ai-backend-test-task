@@ -6,6 +6,7 @@ with the same `Idempotency-Key` until the helpdesk answers 201. A row in `sent`
 is never claimed again.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 
@@ -151,12 +152,16 @@ class Outcome:
 
 async def post_reply(client: httpx.AsyncClient, item: ClaimedDelivery, timeout: float) -> Outcome:
     try:
-        response = await client.post(
-            item.reply_url,
-            json={"ticket_id": item.ticket_id, "message": item.message},
-            headers={"Idempotency-Key": item.idempotency_key},
-            timeout=timeout,
-        )
+        # httpx timeouts are per read/write; asyncio.timeout bounds the whole exchange.
+        async with asyncio.timeout(timeout):
+            response = await client.post(
+                item.reply_url,
+                json={"ticket_id": item.ticket_id, "message": item.message},
+                headers={"Idempotency-Key": item.idempotency_key},
+                timeout=timeout,
+            )
+    except TimeoutError:
+        return Outcome("retry", f"no answer within {timeout}s")
     except httpx.HTTPError as exc:
         # Timeout included: the helpdesk may have stored the reply, so retry with the same key.
         return Outcome("retry", f"{exc.__class__.__name__}: {exc}"[:500])
